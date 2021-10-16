@@ -12,3 +12,4 @@ add_library(asmlib
         asmlib/private/AssemblerEncoding.hpp
         asmlib/private/Assert.cpp
         asmlib/private/Assert.hpp)
+target_include_directories(asmlib PUBLIC .)
