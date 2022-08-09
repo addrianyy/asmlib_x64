@@ -1,6 +1,8 @@
 #pragma once
 #include "Operand.hpp"
 #include <array>
+#include <memory>
+#include <span>
 #include <unordered_map>
 #include <vector>
 
@@ -16,16 +18,30 @@ enum class OperandSize {
 class Assembler {
   friend class EncodingGuard;
 
-  using LabelID = size_t;
+  class LabelPool {
+    constexpr static size_t chunk_max_size = 256;
+
+    struct Chunk {
+      Label labels[chunk_max_size];
+    };
+
+    std::vector<std::unique_ptr<Chunk>> chunks;
+    size_t last_chunk_size = 0;
+
+  public:
+    Label* allocate();
+  };
 
   struct Fixup {
-    std::string label;
+    Label* label;
     size_t rel32_offset;
     size_t end_offset;
   };
 
+  LabelPool label_pool;
+
   std::vector<uint8_t> bytes;
-  std::unordered_map<std::string, size_t> labels;
+  std::unordered_map<std::string, Label*> named_labels;
   std::vector<Fixup> fixups;
 
   OperandSize operand_size = OperandSize::Bits64;
@@ -67,7 +83,9 @@ class Assembler {
     }
   }
 
-  LabelID get_id_for_label(std::string_view label);
+  Label* get_or_create_named_label(std::string name);
+
+  Label* get_label(const detail::LabelOperand& label_operand);
 
   void push_rex(bool w, bool r, bool x, bool b);
   void push_modrm(uint8_t mod, uint8_t reg, uint8_t rm);
@@ -75,13 +93,20 @@ class Assembler {
   void push_imm(Imm imm, size_t size);
   void push_bytes(const struct SmallArray& array);
 
-  template <typename T> void push_value(const T& value) {
+  template <typename T> void push_value(T value) {
     const auto casted = std::bit_cast<std::array<uint8_t, sizeof(T)>>(value);
 
     bytes.reserve(sizeof(T));
     for (const auto b : casted) {
       bytes.push_back(b);
     }
+  }
+  template <typename T> void push_values(std::span<const T> values) {
+    const auto previous_size = bytes.size();
+    const auto data_size = values.size() * sizeof(T);
+
+    bytes.resize(bytes.size() + data_size);
+    std::memcpy(bytes.data() + previous_size, values.data(), data_size);
   }
 
   void require_64bit();
@@ -106,8 +131,8 @@ class Assembler {
   void encode_imm(Imm imm, size_t size, const struct Opcode& op,
                   const struct InstructionEncoding& encoding);
   void encode_standalone(const struct Opcode& op, const struct InstructionEncoding& encoding);
-  void encode_rel32(int32_t rel, const std::optional<std::string_view>& label,
-                    const struct Opcode& op, const struct InstructionEncoding& encoding);
+  void encode_rel32(int32_t rel, Label* label, const struct Opcode& op,
+                    const struct InstructionEncoding& encoding);
   void encode_regimm64(Reg reg, Imm imm, const struct OpcodeRegadd& op,
                        const struct InstructionEncoding& encoding);
 
@@ -125,12 +150,21 @@ class Assembler {
   void apply_fixups();
 
 public:
+  Assembler(const Assembler&) = delete;
+  Assembler& operator=(const Assembler&) = delete;
+
   explicit Assembler(OperandSize size = OperandSize::Bits64) : operand_size(size) {}
 
-  std::vector<uint8_t> get_assembled_bytes();
-  std::vector<uint8_t> take_assembled_bytes();
+  std::span<const uint8_t> get_assembled_bytes();
 
+  size_t current_offset() const { return bytes.size(); }
+
+  Label* create_label();
+
+  Label* label();
+  void label(Label* label);
   void label(std::string label);
+
   void set_operand_size(OperandSize size) { operand_size = size; }
 
   template <typename Fn> void with_operand_size(OperandSize size, Fn fn) {
@@ -140,6 +174,26 @@ public:
     fn();
     operand_size = previous;
   }
+
+  // region datatype_declarations
+
+#define DECLARE_DATATYPE_HELPER(name, type)                                                        \
+  void name(type value) { push_value(value); }                                                     \
+  void name(std::span<const type> values) { push_values(values); }
+
+#define DECLARE_DATATYPE(name, type1, type2)                                                       \
+  DECLARE_DATATYPE_HELPER(name, type1)                                                             \
+  DECLARE_DATATYPE_HELPER(name, type2)
+
+  DECLARE_DATATYPE(db, int8_t, uint8_t)
+  DECLARE_DATATYPE(dw, int16_t, uint16_t)
+  DECLARE_DATATYPE(dd, int32_t, uint32_t)
+  DECLARE_DATATYPE(dq, int64_t, uint64_t)
+
+#undef DECLARE_DATATYPE_HELPER
+#undef DECLARE_DATATYPE
+
+  // endregion
 
   // region instruction_declarations
 

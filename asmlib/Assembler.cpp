@@ -60,6 +60,37 @@ public:
   ~EncodingGuard() { assembler->on_encoding_end(); }
 };
 
+Label* Assembler::LabelPool::allocate() {
+  if (chunks.empty() || last_chunk_size == chunk_max_size) {
+    chunks.push_back(std::make_unique<Chunk>());
+    last_chunk_size = 0;
+  }
+
+  return &chunks.back()->labels[last_chunk_size++];
+}
+
+Label* Assembler::get_or_create_named_label(std::string name) {
+  Label* label_;
+
+  const auto it = named_labels.find(name);
+  if (it == named_labels.end()) {
+    label_ = create_label();
+    named_labels.insert({std::move(name), label_});
+  } else {
+    label_ = it->second;
+  }
+
+  return label_;
+}
+
+Label* Assembler::get_label(const detail::LabelOperand& label_operand) {
+  if (label_operand.label_) {
+    return label_operand.label_;
+  }
+
+  return get_or_create_named_label(std::string(label_operand.name_));
+}
+
 void Assembler::push_rex(bool w, bool r, bool x, bool b) {
   // Usually REX without any attributes doesn't need to be emited because it doesn't
   // change anything. 8 bit instructions operands are exception. For example:
@@ -179,7 +210,7 @@ void Assembler::encode_memory_operand(uint8_t regop, bool rex_r, bool rex_w,
   constexpr uint8_t RM_SIB = 0b100;
   constexpr uint8_t RM_DISP = 0b101;
 
-  if (const auto label = mem.get_label(); !label.empty()) {
+  if (const auto& label = mem.get_label(); label) {
     // Use RIP relative addressing to refer to the label.
 
     push_rex(rex_w, rex_r, false, false);
@@ -188,7 +219,7 @@ void Assembler::encode_memory_operand(uint8_t regop, bool rex_r, bool rex_w,
 
     // We don't know instruction end offset yet. It will be filled after encoding.
     const auto rel32_offset = bytes.size();
-    fixups.push_back(Fixup{std::string(label), rel32_offset, 0});
+    fixups.push_back(Fixup{get_label(*label), rel32_offset, 0});
     pending_fixup_fill = true;
 
     // empty rel32 - will be filled by apply_fixups
@@ -403,8 +434,8 @@ void Assembler::encode_standalone(const Opcode& op, const InstructionEncoding& e
   push_bytes(op.op);
 }
 
-void Assembler::encode_rel32(int32_t rel, const std::optional<std::string_view>& label,
-                             const Opcode& op, const InstructionEncoding& encoding) {
+void Assembler::encode_rel32(int32_t rel, Label* label, const Opcode& op,
+                             const InstructionEncoding& encoding) {
   asm_assert(encoding.rexw == RexwMode::Unneeded && encoding.p66 == Prefix66Mode::Unneeded,
              "Relative jumps/calls should not need REX or 66 prefix.");
 
@@ -416,7 +447,7 @@ void Assembler::encode_rel32(int32_t rel, const std::optional<std::string_view>&
     const size_t end_offset = bytes.size();
     const size_t rel32_offset = end_offset - 4;
 
-    fixups.push_back(Fixup{std::string(*label), rel32_offset, end_offset});
+    fixups.push_back(Fixup{label, rel32_offset, end_offset});
   }
 }
 
@@ -520,7 +551,7 @@ void Assembler::encode_1(std::string_view name, const FullInstructionEncoding& f
 
   case OpTy::Label:
     if (encoding.rel32) {
-      encode_rel32(0, *op0.get_label(), *encoding.rel32, encoding);
+      encode_rel32(0, get_label(*op0.get_label()), *encoding.rel32, encoding);
       return;
     }
     break;
@@ -653,10 +684,10 @@ void Assembler::encode_2(std::string_view name, const FullInstructionEncoding& f
 
 void Assembler::apply_fixups() {
   for (const auto& fixup : fixups) {
-    const auto it = labels.find(fixup.label);
-    asm_assert(it != labels.end(), "Unnamed label was referenced.");
+    const auto label = fixup.label;
+    asm_assert(label->inserted, "Uninserted label was referenced.");
 
-    const auto target = it->second;
+    const auto target = label->offset;
 
     using I32Limits = std::numeric_limits<int32_t>;
 
@@ -679,25 +710,27 @@ void Assembler::apply_fixups() {
   fixups.clear();
 }
 
-std::vector<uint8_t> Assembler::get_assembled_bytes() {
+std::span<const uint8_t> Assembler::get_assembled_bytes() {
   apply_fixups();
-
   return bytes;
 }
 
-std::vector<uint8_t> Assembler::take_assembled_bytes() {
-  apply_fixups();
-  labels.clear();
+Label* Assembler::create_label() { return label_pool.allocate(); }
 
-  return std::move(bytes);
+Label* Assembler::label() {
+  const auto label_ = create_label();
+  label(label_);
+  return label_;
 }
 
-void Assembler::label(std::string label) {
-  // TODO: Add support for local labels.
+void Assembler::label(Label* label) {
+  asm_assert(!label->inserted, "Given label was already inserted.");
+  label->offset = bytes.size();
+  label->inserted = true;
+}
 
-  const auto [_, inserted] = labels.insert({std::move(label), bytes.size()});
-
-  asm_assert(inserted, "Label with the same name was already added.");
+void Assembler::label(std::string label_name) {
+  label(get_or_create_named_label(std::move(label_name)));
 }
 
 } // namespace asmlib
