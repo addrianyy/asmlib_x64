@@ -1,8 +1,9 @@
 #pragma once
 #include <array>
-#include <memory>
+#include <cstdint>
+#include <limits>
 #include <span>
-#include <unordered_map>
+#include <string_view>
 #include <vector>
 
 #include "Operand.hpp"
@@ -19,30 +20,14 @@ enum class OperandSize {
 class Assembler {
   friend class EncodingGuard;
 
-  class LabelPool {
-    constexpr static size_t chunk_max_size = 256;
-
-    struct Chunk {
-      Label labels[chunk_max_size];
-    };
-
-    std::vector<std::unique_ptr<Chunk>> chunks;
-    size_t last_chunk_size = 0;
-
-   public:
-    Label* allocate();
-  };
-
   struct Fixup {
-    Label* label;
-    size_t rel32_offset;
-    size_t end_offset;
+    Label label;
+    size_t rel32_offset{};
+    size_t end_offset{};
   };
-
-  LabelPool label_pool;
 
   std::vector<uint8_t> bytes;
-  std::unordered_map<std::string, Label*> named_labels;
+  std::vector<uint32_t> labels;
   std::vector<Fixup> fixups;
 
   OperandSize operand_size = OperandSize::Bits64;
@@ -53,9 +38,7 @@ class Assembler {
   template <typename T, typename U>
   static bool fits_within(U value) {
     using Limits = std::numeric_limits<T>;
-
     const int64_t v = int64_t(value);
-
     return v <= int64_t(Limits::max()) && v >= int64_t(Limits::min());
   }
 
@@ -85,10 +68,6 @@ class Assembler {
         return 4;
     }
   }
-
-  Label* get_or_create_named_label(std::string name);
-
-  Label* get_label(const detail::LabelOperand& label_operand);
 
   void push_rex(bool w, bool r, bool x, bool b);
   void push_modrm(uint8_t mod, uint8_t reg, uint8_t rm);
@@ -154,7 +133,7 @@ class Assembler {
                   const struct InstructionEncoding& encoding);
   void encode_standalone(const struct Opcode& op, const struct InstructionEncoding& encoding);
   void encode_rel32(int32_t rel,
-                    Label* label,
+                    Label label,
                     const struct Opcode& op,
                     const struct InstructionEncoding& encoding);
   void encode_regimm64(Register reg,
@@ -181,20 +160,7 @@ class Assembler {
   void apply_fixups();
 
  public:
-  Assembler(const Assembler&) = delete;
-  Assembler& operator=(const Assembler&) = delete;
-
   explicit Assembler(OperandSize size = OperandSize::Bits64) : operand_size(size) {}
-
-  std::span<const uint8_t> get_assembled_bytes();
-
-  size_t current_offset() const { return bytes.size(); }
-
-  Label* create_label();
-
-  Label* label();
-  void label(Label* label);
-  void label(std::string label);
 
   void set_operand_size(OperandSize size) { operand_size = size; }
 
@@ -206,6 +172,18 @@ class Assembler {
     fn();
     operand_size = previous;
   }
+
+  uintptr_t current_offset() const { return bytes.size(); }
+
+  Label allocate_label();
+  void insert_label(Label label);
+  Label insert_label();
+
+  bool is_label_inserted(Label label) const;
+
+  std::span<const uint8_t> assembled_instructions();
+
+  void clear();
 
   // region datatype_declarations
 

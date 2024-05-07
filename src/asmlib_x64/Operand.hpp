@@ -1,6 +1,6 @@
 #pragma once
+#include <cstdint>
 #include <optional>
-#include <string>
 #include <variant>
 
 namespace asmlib::x64 {
@@ -29,23 +29,16 @@ using Imm = int64_t;
 class Label {
   friend class Assembler;
 
-  uint64_t inserted : 1 = 0;
-  uint64_t offset : 63 = 0;
-};
+  constexpr static uint32_t invalid_index = std::numeric_limits<uint32_t>::max();
+  uint32_t index{invalid_index};
 
-namespace detail {
-struct LabelOperand {
-  Label* label_ = nullptr;
-  std::string_view name_;
+  explicit Label(uint32_t index) : index(index) {}
 
-  static LabelOperand label(Label* label) {
-    return LabelOperand{.label_ = label, .name_ = std::string_view()};
-  }
-  static LabelOperand name(std::string_view name) {
-    return LabelOperand{.label_ = nullptr, .name_ = name};
-  }
+ public:
+  Label() = default;
+
+  operator bool() const { return index != invalid_index; }
 };
-}  // namespace detail
 
 class Memory {
   friend class Assembler;
@@ -61,26 +54,23 @@ class Memory {
   std::optional<IndexScale> index_scale_;
   int32_t displacement_ = 0;
 
-  std::optional<detail::LabelOperand> label_;
+  std::optional<Label> label_;
 
   explicit Memory(std::optional<Register> base,
                   std::optional<IndexScale> index_scale = std::nullopt,
                   int32_t displacement = 0)
       : base_(base), index_scale_(index_scale), displacement_(displacement) {}
 
-  explicit Memory(detail::LabelOperand label) : label_(label) {}
+  explicit Memory(Label label) : label_(label) {}
 
   std::optional<Register> get_base() const { return base_; }
   std::optional<IndexScale> get_index() const { return index_scale_; }
   int32_t get_displacement() const { return displacement_; }
 
-  std::optional<detail::LabelOperand> get_label() const { return label_; }
+  std::optional<Label> get_label() const { return label_; }
 
  public:
-  static inline Memory label(std::string_view label_name) {
-    return Memory(detail::LabelOperand::name(label_name));
-  }
-  static inline Memory label(Label* label) { return Memory(detail::LabelOperand::label(label)); }
+  static inline Memory label(Label label) { return Memory(label); }
 
   static inline Memory base(Register base) { return Memory(base); }
   static inline Memory index(Register index, uint32_t scale) {
@@ -118,33 +108,25 @@ class Operand {
   };
 
  private:
-  std::variant<Register, Imm, Memory, detail::LabelOperand> op;
+  std::variant<Register, Imm, Memory, Label> op;
   Type type;
 
   const Register* get_reg() const { return std::get_if<Register>(&op); }
   const Imm* get_imm() const { return std::get_if<Imm>(&op); }
   const Memory* get_memory() const { return std::get_if<Memory>(&op); }
-  const detail::LabelOperand* get_label() const {
-    if (const auto label = std::get_if<detail::LabelOperand>(&op)) {
-      return label;
-    }
-    return nullptr;
-  }
+  const Label* get_label() const { return std::get_if<Label>(&op); }
 
   Type get_type() const { return type; }
 
  public:
   Operand(Register reg) : op(reg), type(Type::Register) {}
   Operand(Imm imm) : op(imm), type(Type::Immediate) {}
-  Operand(Label* label) : op(detail::LabelOperand::label(label)), type(Type::Label) {}
-  Operand(std::string_view label) : op(detail::LabelOperand::name(label)), type(Type::Label) {}
-  Operand(const char* label) : op(detail::LabelOperand::name(label)), type(Type::Label) {}
+  Operand(Label label) : op(label), type(Type::Label) {}
   Operand(Memory memory) : op(memory), type(Type::Memory) {}
 
   static inline Operand reg(Register reg) { return Operand(reg); }
   static inline Operand imm(Imm imm) { return Operand(imm); }
-  static inline Operand label(Label* label) { return Operand(label); }
-  static inline Operand label(std::string_view label) { return Operand(label); }
+  static inline Operand label(Label label) { return Operand(label); }
   static inline Operand memory(Memory memory) { return Operand(memory); }
 };
 

@@ -5,28 +5,31 @@ using namespace asmlib::x64;
 
 Assembler as;
 
+const auto test_label = as.allocate_label();
+const auto other_label = as.allocate_label();
+
 as.rdtsc();
 as.nop();
-as.label("test");
+as.insert_label(test_label);
 as.int3();
 as.inc(Register::Rsp);
 as.neg(Register::Rdi);
-as.ja("test");
+as.ja(test_label);
 as.ret(100);
 as.neg(Memory::base_index_disp(Register::Rax, Register::Rcx, 4, 0x123));
 as.with_operand_size(OperandSize::Bits8, [&]() {
-  as.neg(Memory::base(Register::Rdi));
-  as.neg(Register::Rbx);
+as.neg(Memory::base(Register::Rdi));
+as.neg(Register::Rbx);
 });
 as.mov(Memory::base(Register::Rdx), Register::Rcx);
 as.mov(Register::R12, Memory::base(Register::Rdx));
 as.add(Register::Rdx, Register::Rdi);
-as.label("other_label");
+as.insert_label(other_label);
 as.shr(Memory::base(Register::Rdx), Register::Rcx);
-as.mov(Memory::label("test"), 55);
+as.mov(Memory::label(test_label), 55);
 as.add(Register::Rdx, 448);
 as.mov(Register::Rdx, 1235678918881ll);
-as.call("other_label");
+as.call(other_label);
 ```
 
 ```asm

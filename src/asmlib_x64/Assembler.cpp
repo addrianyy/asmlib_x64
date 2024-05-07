@@ -20,9 +20,7 @@
 
 using namespace asmlib::x64;
 
-constexpr uint8_t MOD_DIRECT = 0b11;
-
-using OpTy = Operand::Type;
+constexpr uint8_t modrm_mod_direct = 0b11;
 
 static std::pair<bool, uint8_t> get_register_encoding(Register reg) {
   switch (reg) {
@@ -80,37 +78,6 @@ class EncodingGuard {
   ~EncodingGuard() { assembler->on_encoding_end(); }
 };
 
-Label* Assembler::LabelPool::allocate() {
-  if (chunks.empty() || last_chunk_size == chunk_max_size) {
-    chunks.push_back(std::make_unique<Chunk>());
-    last_chunk_size = 0;
-  }
-
-  return &chunks.back()->labels[last_chunk_size++];
-}
-
-Label* Assembler::get_or_create_named_label(std::string name) {
-  Label* label_;
-
-  const auto it = named_labels.find(name);
-  if (it == named_labels.end()) {
-    label_ = create_label();
-    named_labels.insert({std::move(name), label_});
-  } else {
-    label_ = it->second;
-  }
-
-  return label_;
-}
-
-Label* Assembler::get_label(const detail::LabelOperand& label_operand) {
-  if (label_operand.label_) {
-    return label_operand.label_;
-  }
-
-  return get_or_create_named_label(std::string(label_operand.name_));
-}
-
 void Assembler::push_rex(bool w, bool r, bool x, bool b) {
   // Usually REX without any attributes doesn't need to be emited because it doesn't
   // change anything. 8 bit instructions operands are exception. For example:
@@ -129,25 +96,25 @@ void Assembler::push_rex(bool w, bool r, bool x, bool b) {
 }
 
 void Assembler::push_modrm(uint8_t mod, uint8_t reg, uint8_t rm) {
-  X64_ASM_ASSERT(mod <= 0b11, "Mod in modrm is too big.");
-  X64_ASM_ASSERT(reg <= 0b111, "Reg in modrm is too big.");
-  X64_ASM_ASSERT(rm <= 0b111, "Rm in modrm is too big.");
+  X64_ASM_ASSERT(mod <= 0b11, "mod in modrm is too big");
+  X64_ASM_ASSERT(reg <= 0b111, "reg in modrm is too big");
+  X64_ASM_ASSERT(rm <= 0b111, "rm in modrm is too big");
 
   bytes.push_back(mod << 6 | reg << 3 | rm);
 }
 
 void Assembler::push_sib(uint8_t base, uint8_t index, uint8_t scale) {
-  X64_ASM_ASSERT(base <= 0b111, "Base in sib is too big.");
-  X64_ASM_ASSERT(index <= 0b111, "Index in sib is too big.");
-  X64_ASM_ASSERT(scale <= 0b11, "Scale in sib is too big.");
+  X64_ASM_ASSERT(base <= 0b111, "base in sib is too big");
+  X64_ASM_ASSERT(index <= 0b111, "index in sib is too big");
+  X64_ASM_ASSERT(scale <= 0b11, "scale in sib is too big");
 
   bytes.push_back(scale << 6 | index << 3 | base);
 }
 
 void Assembler::push_imm(Imm imm, size_t size) {
-  static_assert(sizeof(imm) == 8, "Immediate is not 64 bit.");
+  static_assert(sizeof(imm) == 8, "immediate is not 64 bit");
 
-  X64_ASM_ASSERT(size == 1 || size == 2 || size == 4 || size == 8, "Unexpected immediate size");
+  X64_ASM_ASSERT(size == 1 || size == 2 || size == 4 || size == 8, "unexpected immediate size");
 
   const auto casted = std::bit_cast<std::array<uint8_t, 8>>(imm);
 
@@ -162,7 +129,7 @@ void Assembler::push_imm(Imm imm, size_t size) {
     }
   }
 
-  X64_ASM_ASSERT(all_0s || all_fs, "Immediate truncation would cause data loss");
+  X64_ASM_ASSERT(all_0s || all_fs, "immediate truncation would cause data loss");
 
   bytes.reserve(size);
   for (size_t i = 0; i < size; ++i) {
@@ -179,14 +146,14 @@ void Assembler::push_bytes(const SmallArray& array) {
 
 void Assembler::require_64bit() {
   X64_ASM_ASSERT(operand_size == OperandSize::Bits64,
-                 "This operation must be done with 64 bit operand size.");
+                 "this operation must be done with 64 bit operand size");
 }
 
 void Assembler::override_operand_size(const InstructionEncoding& encoding) {
   if (operand_size == OperandSize::Bits16) {
     switch (encoding.p66) {
       case Prefix66Mode::Unusable:
-        X64_ASM_ASSERT(false, "This operation cannot be done with 16 bit operand size.");
+        X64_ASM_ASSERT(false, "this operation cannot be done with 16 bit operand size");
         break;
 
       case Prefix66Mode::Usable:
@@ -230,10 +197,12 @@ void Assembler::encode_memory_operand(uint8_t regop,
                                       bool rex_w,
                                       const SmallArray& opcode,
                                       Memory mem) {
-  constexpr uint8_t RM_SIB = 0b100;
-  constexpr uint8_t RM_DISP = 0b101;
+  constexpr uint8_t rm_sib = 0b100;
+  constexpr uint8_t rm_disp = 0b101;
 
   if (const auto& label = mem.get_label(); label) {
+    X64_ASM_ASSERT(label, "cannot use uninitialized label as memory operand");
+
     // Use RIP relative addressing to refer to the label.
 
     push_rex(rex_w, rex_r, false, false);
@@ -242,7 +211,7 @@ void Assembler::encode_memory_operand(uint8_t regop,
 
     // We don't know instruction end offset yet. It will be filled after encoding.
     const auto rel32_offset = bytes.size();
-    fixups.push_back(Fixup{get_label(*label), rel32_offset, 0});
+    fixups.push_back(Fixup{*label, rel32_offset, 0});
     pending_fixup_fill = true;
 
     // empty rel32 - will be filled by apply_fixups
@@ -265,17 +234,17 @@ void Assembler::encode_memory_operand(uint8_t regop,
     const auto encoding = get_register_id(*base);
 
     // SIB is required to encode RSP or R12 as a base register.
-    if (encoding == RM_SIB) {
+    if (encoding == rm_sib) {
       require_sib = true;
     }
 
     // Displacement is required to encode RBP or R13 as a base register.
-    if (encoding == RM_DISP && !disp) {
+    if (encoding == rm_disp && !disp) {
       disp = 0;
     }
   } else {
     // There must be at least one component in memory operand.
-    X64_ASM_ASSERT(index || disp, "Memory operand is empty.");
+    X64_ASM_ASSERT(index || disp, "memory operand is empty");
 
     if (index) {
       index_no_base = true;
@@ -294,7 +263,7 @@ void Assembler::encode_memory_operand(uint8_t regop,
   if (index) {
     // Special case: R12 can be used as an index register even though it has
     // the same 3-bit encoding as RSP (which cannot).
-    X64_ASM_ASSERT(index->index != Register::Rsp, "RSP cannot be used as an index register.");
+    X64_ASM_ASSERT(index->index != Register::Rsp, "rsp cannot be used as an index register");
 
     require_sib = true;
   }
@@ -313,7 +282,7 @@ void Assembler::encode_memory_operand(uint8_t regop,
   push_bytes(opcode);
 
   if (!require_sib) {
-    X64_ASM_ASSERT(!index_no_base, "There cannot be index register if SIB is not required.");
+    X64_ASM_ASSERT(!index_no_base, "there cannot be index register if SIB is not required");
 
     if (disp) {
       if (base) {
@@ -332,7 +301,7 @@ void Assembler::encode_memory_operand(uint8_t regop,
         // In 64 bit mode the only way to encode displacement-only operand is to use
         // SIB byte with these special values. Displacement must be 32 bit wide.
         // Encoding without SIB is actually RIP-relative addressing.
-        push_modrm(0b00, regop, RM_SIB);
+        push_modrm(0b00, regop, rm_sib);
         push_sib(0b101, 0b100, 0);
         push_value(int32_t(*disp));
       }
@@ -344,14 +313,14 @@ void Assembler::encode_memory_operand(uint8_t regop,
     if (disp && !index_no_base) {
       // Pick the shortest possible displacement encoding.
       if (byte_disp) {
-        push_modrm(0b01, regop, RM_SIB);
+        push_modrm(0b01, regop, rm_sib);
       } else {
-        push_modrm(0b10, regop, RM_SIB);
+        push_modrm(0b10, regop, rm_sib);
       }
     } else {
       // No displacement is needed or index_no_base is true. In that case
       // base will be RBP and 32-bit displacement will be still required.
-      push_modrm(0b00, regop, RM_SIB);
+      push_modrm(0b00, regop, rm_sib);
     }
 
     // If index_no_base is set then MODRM.MOD == 00 and base register == RBP
@@ -376,7 +345,7 @@ void Assembler::encode_memory_operand(uint8_t regop,
           x86_scale = 3;
           break;
         default:
-          X64_ASM_ASSERT(false, "Only scales 1, 2, 4 and 8 are supported.");
+          X64_ASM_ASSERT(false, "only scales 1, 2, 4 and 8 are supported");
       }
     }
 
@@ -402,7 +371,7 @@ void Assembler::encode_regreg(Register reg1,
   override_operand_size(encoding);
   push_rex(get_rexw(encoding), reg1_e, false, reg2_e);
   push_bytes(op.op);
-  push_modrm(MOD_DIRECT, reg1_enc, reg2_enc);
+  push_modrm(modrm_mod_direct, reg1_enc, reg2_enc);
 }
 
 void Assembler::encode_regimm(Register reg,
@@ -415,7 +384,7 @@ void Assembler::encode_regimm(Register reg,
   override_operand_size(encoding);
   push_rex(get_rexw(encoding), false, false, reg_e);
   push_bytes(op.op);
-  push_modrm(MOD_DIRECT, op.digit, reg_enc);
+  push_modrm(modrm_mod_direct, op.digit, reg_enc);
   push_imm(imm, size);
 }
 
@@ -452,7 +421,7 @@ void Assembler::encode_reg(Register reg,
   override_operand_size(encoding);
   push_rex(get_rexw(encoding), false, false, reg_e);
   push_bytes(op.op);
-  push_modrm(MOD_DIRECT, op.digit, reg_enc);
+  push_modrm(modrm_mod_direct, op.digit, reg_enc);
 }
 
 void Assembler::encode_imm(Imm imm,
@@ -472,16 +441,17 @@ void Assembler::encode_standalone(const Opcode& op, const InstructionEncoding& e
 }
 
 void Assembler::encode_rel32(int32_t rel,
-                             Label* label,
+                             Label label,
                              const Opcode& op,
                              const InstructionEncoding& encoding) {
   X64_ASM_ASSERT(encoding.rexw == RexwMode::Unneeded && encoding.p66 == Prefix66Mode::Unneeded,
-                 "Relative jumps/calls should not need REX or 66 prefix.");
+                 "relative jumps/calls should not need REX or 66 prefix");
 
   encode_imm(rel, sizeof(rel), op, encoding);
 
   if (label) {
-    X64_ASM_ASSERT(rel == 0, "Target label was specified but relative offset was not 0.");
+    X64_ASM_ASSERT(label, "cannot use uninitialized label as memory operand");
+    X64_ASM_ASSERT(rel == 0, "target label was specified but relative offset was not 0");
 
     const size_t end_offset = bytes.size();
     const size_t rel32_offset = end_offset - 4;
@@ -498,7 +468,7 @@ void Assembler::encode_regimm64(Register reg,
 
   const auto [reg_e, reg_enc] = get_register_encoding(reg);
 
-  X64_ASM_ASSERT(op.op.size == 1, "Only 1 byte opcodes for r64, imm64 are supported.");
+  X64_ASM_ASSERT(op.op.size == 1, "only 1 byte opcodes for r64, imm64 are supported");
   const uint8_t operation = op.op.bytes[0] + reg_enc;
 
   push_rex(true, false, false, reg_e);
@@ -514,8 +484,8 @@ const struct InstructionEncoding& Assembler::instruction_preprocess(
   const InstructionEncoding& encoding = [&]() -> const InstructionEncoding& {
     if (operand_size == OperandSize::Bits8) {
       X64_ASM_ASSERT(!!full_encoding.encoding_8bit,
-                     "This instruction doesn't support 8 bit operand size.");
-      X64_ASM_ASSERT(full_encoding.encoding_8bit->fix_8bit, "8 bit fix must be enabled.");
+                     "this instruction doesn't support 8 bit operand size");
+      X64_ASM_ASSERT(full_encoding.encoding_8bit->fix_8bit, "8 bit fix must be enabled");
 
       return *full_encoding.encoding_8bit;
     }
@@ -548,7 +518,7 @@ void Assembler::on_encoding_end() {
   if (pending_fixup_fill) {
     auto& fixup = fixups[fixups.size() - 1];
 
-    X64_ASM_ASSERT(fixup.end_offset == 0, "Fixup fill is pending but end offset isn't 0.");
+    X64_ASM_ASSERT(fixup.end_offset == 0, "fixup fill is pending but end offset isn't 0");
 
     fixup.end_offset = bytes.size();
     pending_fixup_fill = false;
@@ -565,12 +535,14 @@ void Assembler::encode_0(std::string_view name, const FullInstructionEncoding& f
     return;
   }
 
-  X64_ASM_ASSERT(false, "This operand combination is unsupported for this instruction.");
+  X64_ASM_ASSERT(false, "this operand combination is unsupported for this instruction");
 }
 
 void Assembler::encode_1(std::string_view name,
                          const FullInstructionEncoding& full_encoding,
                          const Operand& op0) {
+  using OpTy = Operand::Type;
+
   EncodingGuard guard(this);
 
   std::array operands{&op0};
@@ -594,7 +566,7 @@ void Assembler::encode_1(std::string_view name,
 
     case OpTy::Label:
       if (encoding.rel32) {
-        encode_rel32(0, get_label(*op0.get_label()), *encoding.rel32, encoding);
+        encode_rel32(0, *op0.get_label(), *encoding.rel32, encoding);
         return;
       }
       break;
@@ -619,13 +591,15 @@ void Assembler::encode_1(std::string_view name,
       break;
   }
 
-  X64_ASM_ASSERT(false, "This operand combination is unsupported for this instruction.");
+  X64_ASM_ASSERT(false, "this operand combination is unsupported for this instruction");
 }
 
 void Assembler::encode_2(std::string_view name,
                          const FullInstructionEncoding& full_encoding,
                          const Operand& op0,
                          const Operand& op1) {
+  using OpTy = Operand::Type;
+
   EncodingGuard guard(this);
 
   std::array operands{&op0, &op1};
@@ -724,15 +698,14 @@ void Assembler::encode_2(std::string_view name,
       break;
   }
 
-  X64_ASM_ASSERT(false, "This operand combination is unsupported for this instruction.");
+  X64_ASM_ASSERT(false, "this operand combination is unsupported for this instruction");
 }
 
 void Assembler::apply_fixups() {
   for (const auto& fixup : fixups) {
-    const auto label = fixup.label;
-    X64_ASM_ASSERT(label->inserted, "Uninserted label was referenced.");
-
-    const auto target = label->offset;
+    const auto target = labels[fixup.label.index];
+    X64_ASM_ASSERT(target != std::numeric_limits<uint32_t>::max(),
+                   "fixup label was not inserted into the instruction stream");
 
     using I32Limits = std::numeric_limits<int32_t>;
 
@@ -742,7 +715,7 @@ void Assembler::apply_fixups() {
     const int64_t rel64 = int64_t(target) - int64_t(fixup.end_offset);
 
     X64_ASM_ASSERT(rel64 >= int64_t(I32Limits::min()) && rel64 <= int64_t(I32Limits::max()),
-                   "Cannot encode jump target in rel32.");
+                   "cannot encode jump target in rel32");
 
     const auto rel32 = uint32_t(rel64);
     size_t write_offset = fixup.rel32_offset;
@@ -755,29 +728,43 @@ void Assembler::apply_fixups() {
   fixups.clear();
 }
 
-std::span<const uint8_t> Assembler::get_assembled_bytes() {
+Label Assembler::allocate_label() {
+  const auto index = uint32_t(labels.size());
+  labels.emplace_back(std::numeric_limits<uint32_t>::max());
+  return Label{index};
+}
+
+void Assembler::insert_label(Label label) {
+  X64_ASM_ASSERT(label.index != Label::invalid_index, "cannot insert an uninitialized label");
+  X64_ASM_ASSERT(!is_label_inserted(label),
+                 "label was already inserted into the instruction stream");
+  labels[label.index] = uint32_t(bytes.size());
+}
+
+Label Assembler::insert_label() {
+  const auto l = allocate_label();
+  insert_label(l);
+  return l;
+}
+
+bool Assembler::is_label_inserted(Label label) const {
+  if (label.index == Label::invalid_index) {
+    return false;
+  }
+  return labels[label.index] != std::numeric_limits<uint32_t>::max();
+}
+
+std::span<const uint8_t> Assembler::assembled_instructions() {
   apply_fixups();
   return bytes;
 }
 
-Label* Assembler::create_label() {
-  return label_pool.allocate();
-}
+void Assembler::clear() {
+  bytes.clear();
+  labels.clear();
+  fixups.clear();
 
-Label* Assembler::label() {
-  const auto label_ = create_label();
-  label(label_);
-  return label_;
-}
-
-void Assembler::label(Label* label) {
-  X64_ASM_ASSERT(!label->inserted, "Given label was already inserted.");
-  label->offset = bytes.size();
-  label->inserted = true;
-}
-
-void Assembler::label(std::string label_name) {
-  label(get_or_create_named_label(std::move(label_name)));
+  operand_size = OperandSize::Bits64;
 }
 
 }  // namespace asmlib::x64
