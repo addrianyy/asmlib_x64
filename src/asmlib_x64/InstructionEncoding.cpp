@@ -5,9 +5,15 @@ using namespace asmlib::x64;
 #define EXPORT_ENCODING(name)                                    \
   namespace asmlib::x64 {                                        \
   const FullInstructionEncoding* _asm_##name##_encoding = &name; \
-  }
-#define EXPORT_ENCODING_CUSTOM_NAME(name, encoding) \
+  }                                                              \
+  const FullInstructionEncoding* _asm_##name##_encoding = &name;
+
+#define EXPORT_ENCODING_CUSTOM_NAME(name, encoding)                  \
+  namespace asmlib::x64 {                                            \
+  const FullInstructionEncoding* _asm_##name##_encoding = &encoding; \
+  }                                                                  \
   const FullInstructionEncoding* _asm_##name##_encoding = &encoding;
+
 #define MAKE_ARRAY(...) \
   { __VA_ARGS__ }
 
