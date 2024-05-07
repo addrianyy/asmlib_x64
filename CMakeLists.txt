@@ -1,15 +1,11 @@
-cmake_minimum_required(VERSION 3.8)
-project(asmlib)
+cmake_minimum_required(VERSION 3.15)
 
-set(CMAKE_CXX_STANDARD 20)
+add_library(asmlib_x64 "")
+add_subdirectory(src)
 
-add_library(asmlib
-        asmlib/Assembler.cpp
-        asmlib/Assembler.hpp
-        asmlib/Operand.cpp
-        asmlib/Operand.hpp
-        asmlib/private/AssemblerEncoding.cpp
-        asmlib/private/AssemblerEncoding.hpp
-        asmlib/private/Assert.cpp
-        asmlib/private/Assert.hpp)
-target_include_directories(asmlib PUBLIC .)
+target_include_directories(asmlib_x64 PUBLIC src)
+target_compile_features(asmlib_x64 PUBLIC cxx_std_20)
+
+if (TARGET baselib)
+    target_link_libraries(asmlib_x64 PUBLIC baselib)
+endif()

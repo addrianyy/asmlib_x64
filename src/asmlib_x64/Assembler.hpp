@@ -1,12 +1,13 @@
 #pragma once
-#include "Operand.hpp"
 #include <array>
 #include <memory>
 #include <span>
 #include <unordered_map>
 #include <vector>
 
-namespace asmlib {
+#include "Operand.hpp"
+
+namespace asmlib::x64 {
 
 enum class OperandSize {
   Bits8 = 8,
@@ -28,7 +29,7 @@ class Assembler {
     std::vector<std::unique_ptr<Chunk>> chunks;
     size_t last_chunk_size = 0;
 
-  public:
+   public:
     Label* allocate();
   };
 
@@ -49,7 +50,8 @@ class Assembler {
   bool force_rex = false;
   bool pending_fixup_fill = false;
 
-  template <typename T, typename U> static bool fits_within(U value) {
+  template <typename T, typename U>
+  static bool fits_within(U value) {
     using Limits = std::numeric_limits<T>;
 
     const int64_t v = int64_t(value);
@@ -58,28 +60,29 @@ class Assembler {
   }
 
   /// Check if value fits within imm32 adjusted for operand size.
-  template <typename T> bool fits_within_imm32(T value) const {
+  template <typename T>
+  bool fits_within_imm32(T value) const {
     switch (operand_size) {
-    case OperandSize::Bits8:
-      return fits_within<int8_t>(value);
+      case OperandSize::Bits8:
+        return fits_within<int8_t>(value);
 
-    case OperandSize::Bits16:
-      return fits_within<int16_t>(value);
+      case OperandSize::Bits16:
+        return fits_within<int16_t>(value);
 
-    default:
-      return fits_within<int32_t>(value);
+      default:
+        return fits_within<int32_t>(value);
     }
   }
 
   /// Get imm32 size adjusted for operand size.
   size_t get_imm32_size() const {
     switch (operand_size) {
-    case OperandSize::Bits8:
-      return 1;
-    case OperandSize::Bits16:
-      return 2;
-    default:
-      return 4;
+      case OperandSize::Bits8:
+        return 1;
+      case OperandSize::Bits16:
+        return 2;
+      default:
+        return 4;
     }
   }
 
@@ -93,7 +96,8 @@ class Assembler {
   void push_imm(Imm imm, size_t size);
   void push_bytes(const struct SmallArray& array);
 
-  template <typename T> void push_value(T value) {
+  template <typename T>
+  void push_value(T value) {
     const auto casted = std::bit_cast<std::array<uint8_t, sizeof(T)>>(value);
 
     bytes.reserve(sizeof(T));
@@ -101,7 +105,8 @@ class Assembler {
       bytes.push_back(b);
     }
   }
-  template <typename T> void push_values(std::span<const T> values) {
+  template <typename T>
+  void push_values(std::span<const T> values) {
     const auto previous_size = bytes.size();
     const auto data_size = values.size() * sizeof(T);
 
@@ -113,43 +118,69 @@ class Assembler {
   void override_operand_size(const struct InstructionEncoding& encoding);
   bool get_rexw(const struct InstructionEncoding& encoding);
 
-  void encode_memory_operand(uint8_t regop, bool rex_r, bool rex_w, const struct SmallArray& opcode,
+  void encode_memory_operand(uint8_t regop,
+                             bool rex_r,
+                             bool rex_w,
+                             const struct SmallArray& opcode,
                              Memory mem);
 
-  void encode_regreg(Reg reg1, Reg reg2, const struct Opcode& op,
+  void encode_regreg(Register reg1,
+                     Register reg2,
+                     const struct Opcode& op,
                      const struct InstructionEncoding& encoding);
-  void encode_regimm(Reg reg, Imm imm, size_t size, const struct OpcodeDigit& op,
+  void encode_regimm(Register reg,
+                     Imm imm,
+                     size_t size,
+                     const struct OpcodeDigit& op,
                      const struct InstructionEncoding& encoding);
-  void encode_memreg_regmem(Reg reg, Memory mem, const struct Opcode& op,
+  void encode_memreg_regmem(Register reg,
+                            Memory mem,
+                            const struct Opcode& op,
                             const struct InstructionEncoding& encoding);
-  void encode_memimm(Memory mem, Imm imm, size_t size, const struct OpcodeDigit& op,
+  void encode_memimm(Memory mem,
+                     Imm imm,
+                     size_t size,
+                     const struct OpcodeDigit& op,
                      const struct InstructionEncoding& encoding);
-  void encode_mem(Memory mem, const struct OpcodeDigit& op,
+  void encode_mem(Memory mem,
+                  const struct OpcodeDigit& op,
                   const struct InstructionEncoding& encoding);
-  void encode_reg(Reg reg, const struct OpcodeDigit& op,
+  void encode_reg(Register reg,
+                  const struct OpcodeDigit& op,
                   const struct InstructionEncoding& encoding);
-  void encode_imm(Imm imm, size_t size, const struct Opcode& op,
+  void encode_imm(Imm imm,
+                  size_t size,
+                  const struct Opcode& op,
                   const struct InstructionEncoding& encoding);
   void encode_standalone(const struct Opcode& op, const struct InstructionEncoding& encoding);
-  void encode_rel32(int32_t rel, Label* label, const struct Opcode& op,
+  void encode_rel32(int32_t rel,
+                    Label* label,
+                    const struct Opcode& op,
                     const struct InstructionEncoding& encoding);
-  void encode_regimm64(Reg reg, Imm imm, const struct OpcodeRegadd& op,
+  void encode_regimm64(Register reg,
+                       Imm imm,
+                       const struct OpcodeRegadd& op,
                        const struct InstructionEncoding& encoding);
 
-  const struct InstructionEncoding&
-  instruction_preprocess(std::string_view name, const struct FullInstructionEncoding& encoding,
-                         const Operand** operands, size_t operands_count);
+  const struct InstructionEncoding& instruction_preprocess(
+    std::string_view name,
+    const struct FullInstructionEncoding& encoding,
+    const Operand** operands,
+    size_t operands_count);
   void on_encoding_end();
 
   void encode_0(std::string_view name, const struct FullInstructionEncoding& encoding);
-  void encode_1(std::string_view name, const struct FullInstructionEncoding& encoding,
+  void encode_1(std::string_view name,
+                const struct FullInstructionEncoding& encoding,
                 const Operand& op0);
-  void encode_2(std::string_view name, const struct FullInstructionEncoding& encoding,
-                const Operand& op0, const Operand& op1);
+  void encode_2(std::string_view name,
+                const struct FullInstructionEncoding& encoding,
+                const Operand& op0,
+                const Operand& op1);
 
   void apply_fixups();
 
-public:
+ public:
   Assembler(const Assembler&) = delete;
   Assembler& operator=(const Assembler&) = delete;
 
@@ -167,7 +198,8 @@ public:
 
   void set_operand_size(OperandSize size) { operand_size = size; }
 
-  template <typename Fn> void with_operand_size(OperandSize size, Fn fn) {
+  template <typename Fn>
+  void with_operand_size(OperandSize size, Fn fn) {
     const auto previous = operand_size;
 
     operand_size = size;
@@ -177,12 +209,12 @@ public:
 
   // region datatype_declarations
 
-#define DECLARE_DATATYPE_HELPER(name, type)                                                        \
-  void name(type value) { push_value(value); }                                                     \
+#define DECLARE_DATATYPE_HELPER(name, type)    \
+  void name(type value) { push_value(value); } \
   void name(std::span<const type> values) { push_values(values); }
 
-#define DECLARE_DATATYPE(name, type1, type2)                                                       \
-  DECLARE_DATATYPE_HELPER(name, type1)                                                             \
+#define DECLARE_DATATYPE(name, type1, type2) \
+  DECLARE_DATATYPE_HELPER(name, type1)       \
   DECLARE_DATATYPE_HELPER(name, type2)
 
   DECLARE_DATATYPE(db, int8_t, uint8_t)
@@ -201,24 +233,24 @@ public:
 #define STRINGIFY(x) STRINGIFY_HELPER(x)
 #define ENCODING_NAME(name) _asm_##name##_encoding
 
-#define DECLARE_INSTRUCTION_0(name)                                                                \
-  void name() {                                                                                    \
-    extern const FullInstructionEncoding* ENCODING_NAME(name);                                     \
-    encode_0(STRINGIFY(name), *ENCODING_NAME(name));                                               \
+#define DECLARE_INSTRUCTION_0(name)                            \
+  void name() {                                                \
+    extern const FullInstructionEncoding* ENCODING_NAME(name); \
+    encode_0(STRINGIFY(name), *ENCODING_NAME(name));           \
   }
-#define DECLARE_INSTRUCTION_1(name)                                                                \
-  void name(const Operand& op0) {                                                                  \
-    extern const FullInstructionEncoding* ENCODING_NAME(name);                                     \
-    encode_1(STRINGIFY(name), *ENCODING_NAME(name), op0);                                          \
+#define DECLARE_INSTRUCTION_1(name)                            \
+  void name(const Operand& op0) {                              \
+    extern const FullInstructionEncoding* ENCODING_NAME(name); \
+    encode_1(STRINGIFY(name), *ENCODING_NAME(name), op0);      \
   }
-#define DECLARE_INSTRUCTION_2(name)                                                                \
-  void name(const Operand& op0, const Operand& op1) {                                              \
-    extern const FullInstructionEncoding* ENCODING_NAME(name);                                     \
-    encode_2(STRINGIFY(name), *ENCODING_NAME(name), op0, op1);                                     \
+#define DECLARE_INSTRUCTION_2(name)                            \
+  void name(const Operand& op0, const Operand& op1) {          \
+    extern const FullInstructionEncoding* ENCODING_NAME(name); \
+    encode_2(STRINGIFY(name), *ENCODING_NAME(name), op0, op1); \
   }
-#define DECLARE_CONDITIONAL(jcc_name, cmov_name, setcc_name)                                       \
-  DECLARE_INSTRUCTION_1(jcc_name)                                                                  \
-  DECLARE_INSTRUCTION_2(cmov_name)                                                                 \
+#define DECLARE_CONDITIONAL(jcc_name, cmov_name, setcc_name) \
+  DECLARE_INSTRUCTION_1(jcc_name)                            \
+  DECLARE_INSTRUCTION_2(cmov_name)                           \
   DECLARE_INSTRUCTION_1(setcc_name)
 
   DECLARE_INSTRUCTION_2(add)
@@ -316,4 +348,4 @@ public:
   // endregion
 };
 
-} // namespace asmlib
+}  // namespace asmlib::x64

@@ -1,35 +1,34 @@
 # x64 assembler library in C++20
-This library can generate x64 assembly instructions in C++ application.
 
-C++ code:
 ```cpp
+using namespace asmlib::x64;
+
 Assembler as;
 
 as.rdtsc();
 as.nop();
 as.label("test");
 as.int3();
-as.inc(Reg::Rsp);
-as.neg(Reg::Rdi);
+as.inc(Register::Rsp);
+as.neg(Register::Rdi);
 as.ja("test");
 as.ret(100);
-as.neg(Memory::base_index_disp(Reg::Rax, Reg::Rcx, 4, 0x123));
+as.neg(Memory::base_index_disp(Register::Rax, Register::Rcx, 4, 0x123));
 as.with_operand_size(OperandSize::Bits8, [&]() {
-  as.neg(Memory::base(Reg::Rdi));
-  as.neg(Reg::Rbx);
+  as.neg(Memory::base(Register::Rdi));
+  as.neg(Register::Rbx);
 });
-as.mov(Memory::base(Reg::Rdx), Reg::Rcx);
-as.mov(Reg::R12, Memory::base(Reg::Rdx));
-as.add(Reg::Rdx, Reg::Rdi);
+as.mov(Memory::base(Register::Rdx), Register::Rcx);
+as.mov(Register::R12, Memory::base(Register::Rdx));
+as.add(Register::Rdx, Register::Rdi);
 as.label("other_label");
-as.shr(Memory::base(Reg::Rdx), Reg::Rcx);
+as.shr(Memory::base(Register::Rdx), Register::Rcx);
 as.mov(Memory::label("test"), 55);
-as.add(Reg::Rdx, 448);
-as.mov(Reg::Rdx, 1235678918881ll);
+as.add(Register::Rdx, 448);
+as.mov(Register::Rdx, 1235678918881ll);
 as.call("other_label");
 ```
 
-Generated assembly:
 ```asm
 00000000  0F31              rdtsc
 00000002  90                nop
@@ -51,11 +50,4 @@ Generated assembly:
 0000003D  48BAE1F833B41F01  mov rdx,0x11fb433f8e1
          -0000
 00000047  E8DCFFFFFF        call 0x28
-```
-
-## Usage:
-Clone library to your project dependencies folder and add following lines to `CMakeLists.txt`:
-```cmake
-add_subdirectory("deps/asmlib")
-target_link_libraries(${PROJECT_NAME} asmlib)
 ```

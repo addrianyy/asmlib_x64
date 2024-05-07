@@ -1,4 +1,3 @@
-BasedOnStyle: LLVM
+BasedOnStyle: Chromium
 ColumnLimit: 100
-PointerAlignment: Left
 ContinuationIndentWidth: 2

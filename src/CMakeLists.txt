@@ -1,0 +1,1 @@
+add_subdirectory(asmlib_x64)

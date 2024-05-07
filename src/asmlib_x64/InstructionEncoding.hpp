@@ -1,7 +1,9 @@
 #pragma once
+#include <cstdint>
+#include <initializer_list>
 #include <optional>
 
-namespace asmlib {
+namespace asmlib::x64 {
 
 enum class RexwMode {
   ExplicitRequired,
@@ -89,4 +91,4 @@ struct FullInstructionEncoding {
   }
 };
 
-} // namespace asmlib
+}  // namespace asmlib::x64
