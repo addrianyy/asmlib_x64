@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <optional>
 #include <variant>
+#include <limits>
 
 namespace asmlib::x64 {
 

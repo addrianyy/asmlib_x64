@@ -5,6 +5,7 @@
 #include <span>
 #include <string_view>
 #include <vector>
+#include <cstring>
 
 #include "Operand.hpp"
 
