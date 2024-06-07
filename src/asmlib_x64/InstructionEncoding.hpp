@@ -3,33 +3,33 @@
 #include <initializer_list>
 #include <utility>
 
-namespace asmlib::x64 {
+namespace asmlib::x64::encoding {
 
 namespace detail {
 void trigger_consteval_failure(char const* message);
 }
 
 template <typename T>
-struct EncodingOptional {
+struct Optional {
   T value{};
   bool has_value{false};
 
-  consteval EncodingOptional() = default;
-  consteval EncodingOptional(T value) : value(std::move(value)), has_value(true) {}
+  consteval Optional() = default;
+  consteval Optional(T value) : value(std::move(value)), has_value(true) {}
 
   constexpr operator bool() const { return has_value; }
   constexpr const T* operator->() const { return &value; }
   constexpr const T& operator*() const { return value; }
 };
 
-struct EncodingArray {
+struct Array {
   // Increase when needed.
   constexpr static size_t Capacity = 2;
 
   uint8_t bytes[Capacity]{};
   uint8_t size = 0;
 
-  consteval EncodingArray(std::initializer_list<uint8_t> elements) {
+  consteval Array(std::initializer_list<uint8_t> elements) {
     if (elements.size() > Capacity) {
       detail::trigger_consteval_failure("overflowed SmallArray");
     }
@@ -54,16 +54,16 @@ enum class Prefix66Mode : uint8_t {
 };
 
 struct Opcode {
-  EncodingArray op;
+  Array op;
 };
 
 struct OpcodeDigit {
-  EncodingArray op;
+  Array op;
   uint8_t digit;
 };
 
 struct OpcodeRegadd {
-  EncodingArray op;
+  Array op;
 };
 
 struct InstructionEncoding {
@@ -74,36 +74,36 @@ struct InstructionEncoding {
   bool fix_8bit = false;
 
   /// r64, r/m64
-  EncodingOptional<Opcode> regreg;
+  Optional<Opcode> regreg;
 
   /// r/m64, r64
-  EncodingOptional<Opcode> regreg_inv;
+  Optional<Opcode> regreg_inv;
 
-  EncodingOptional<OpcodeDigit> regimm32;
-  EncodingOptional<OpcodeDigit> memimm32;
-  EncodingOptional<OpcodeDigit> regimm8;
-  EncodingOptional<OpcodeDigit> memimm8;
-  EncodingOptional<OpcodeDigit> reguimm8;
-  EncodingOptional<OpcodeDigit> memuimm8;
-  EncodingOptional<Opcode> regmem;
-  EncodingOptional<Opcode> memreg;
-  EncodingOptional<OpcodeDigit> regcl;
-  EncodingOptional<OpcodeDigit> memcl;
-  EncodingOptional<OpcodeDigit> reg;
-  EncodingOptional<OpcodeDigit> mem;
-  EncodingOptional<Opcode> rel32;
-  EncodingOptional<Opcode> imm32;
-  EncodingOptional<Opcode> uimm16;
-  EncodingOptional<OpcodeRegadd> regimm64;
-  EncodingOptional<Opcode> standalone;
+  Optional<OpcodeDigit> regimm32;
+  Optional<OpcodeDigit> memimm32;
+  Optional<OpcodeDigit> regimm8;
+  Optional<OpcodeDigit> memimm8;
+  Optional<OpcodeDigit> reguimm8;
+  Optional<OpcodeDigit> memuimm8;
+  Optional<Opcode> regmem;
+  Optional<Opcode> memreg;
+  Optional<OpcodeDigit> regcl;
+  Optional<OpcodeDigit> memcl;
+  Optional<OpcodeDigit> reg;
+  Optional<OpcodeDigit> mem;
+  Optional<Opcode> rel32;
+  Optional<Opcode> imm32;
+  Optional<Opcode> uimm16;
+  Optional<OpcodeRegadd> regimm64;
+  Optional<Opcode> standalone;
 };
 
 struct FullInstructionEncoding {
   InstructionEncoding encoding_normal;
-  EncodingOptional<InstructionEncoding> encoding_8bit;
+  Optional<InstructionEncoding> encoding_8bit;
 
   explicit consteval FullInstructionEncoding(InstructionEncoding normal,
-                                             EncodingOptional<InstructionEncoding> _8bit = {})
+                                             Optional<InstructionEncoding> _8bit = {})
       : encoding_normal(normal) {
     if (_8bit.has_value) {
       auto& v = _8bit.value;
@@ -116,4 +116,4 @@ struct FullInstructionEncoding {
   }
 };
 
-}  // namespace asmlib::x64
+}  // namespace asmlib::x64::encoding

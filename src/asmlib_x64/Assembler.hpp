@@ -10,12 +10,18 @@
 
 namespace asmlib::x64 {
 
-struct EncodingArray;
+namespace encoding {
+struct Array;
 struct FullInstructionEncoding;
 struct InstructionEncoding;
 struct Opcode;
 struct OpcodeDigit;
 struct OpcodeRegadd;
+}  // namespace encoding
+
+namespace detail {
+class EncodingGuard;
+}
 
 enum class OperandSize {
   Bits8 = 8,
@@ -25,7 +31,7 @@ enum class OperandSize {
 };
 
 class Assembler {
-  friend class EncodingGuard;
+  friend class detail::EncodingGuard;
 
   struct Fixup {
     Label label;
@@ -46,7 +52,7 @@ class Assembler {
   void push_modrm(uint8_t mod, uint8_t reg, uint8_t rm);
   void push_sib(uint8_t base, uint8_t index, uint8_t scale);
   void push_imm(Imm imm, size_t size);
-  void push_bytes(const EncodingArray& array);
+  void push_bytes(const encoding::Array& array);
 
   template <typename T>
   void push_value(T value) {
@@ -67,55 +73,65 @@ class Assembler {
   }
 
   void require_64bit();
-  void override_operand_size(const InstructionEncoding& encoding);
-  bool get_rexw(const InstructionEncoding& encoding);
+  void override_operand_size(const encoding::InstructionEncoding& encoding);
+  bool get_rexw(const encoding::InstructionEncoding& encoding);
 
   void encode_memory_operand(uint8_t regop,
                              bool rex_r,
                              bool rex_w,
-                             const EncodingArray& opcode,
+                             const encoding::Array& opcode,
                              Memory mem);
 
   void encode_regreg(Register reg1,
                      Register reg2,
-                     const Opcode& op,
-                     const InstructionEncoding& encoding);
+                     const encoding::Opcode& op,
+                     const encoding::InstructionEncoding& encoding);
   void encode_regimm(Register reg,
                      Imm imm,
                      size_t size,
-                     const OpcodeDigit& op,
-                     const InstructionEncoding& encoding);
+                     const encoding::OpcodeDigit& op,
+                     const encoding::InstructionEncoding& encoding);
   void encode_memreg_regmem(Register reg,
                             Memory mem,
-                            const Opcode& op,
-                            const InstructionEncoding& encoding);
+                            const encoding::Opcode& op,
+                            const encoding::InstructionEncoding& encoding);
   void encode_memimm(Memory mem,
                      Imm imm,
                      size_t size,
-                     const OpcodeDigit& op,
-                     const InstructionEncoding& encoding);
-  void encode_mem(Memory mem, const OpcodeDigit& op, const InstructionEncoding& encoding);
-  void encode_reg(Register reg, const OpcodeDigit& op, const InstructionEncoding& encoding);
-  void encode_imm(Imm imm, size_t size, const Opcode& op, const InstructionEncoding& encoding);
-  void encode_standalone(const Opcode& op, const InstructionEncoding& encoding);
+                     const encoding::OpcodeDigit& op,
+                     const encoding::InstructionEncoding& encoding);
+  void encode_mem(Memory mem,
+                  const encoding::OpcodeDigit& op,
+                  const encoding::InstructionEncoding& encoding);
+  void encode_reg(Register reg,
+                  const encoding::OpcodeDigit& op,
+                  const encoding::InstructionEncoding& encoding);
+  void encode_imm(Imm imm,
+                  size_t size,
+                  const encoding::Opcode& op,
+                  const encoding::InstructionEncoding& encoding);
+  void encode_standalone(const encoding::Opcode& op, const encoding::InstructionEncoding& encoding);
   void encode_rel32(int32_t rel,
                     Label label,
-                    const Opcode& op,
-                    const InstructionEncoding& encoding);
+                    const encoding::Opcode& op,
+                    const encoding::InstructionEncoding& encoding);
   void encode_regimm64(Register reg,
                        Imm imm,
-                       const OpcodeRegadd& op,
-                       const InstructionEncoding& encoding);
+                       const encoding::OpcodeRegadd& op,
+                       const encoding::InstructionEncoding& encoding);
 
-  const InstructionEncoding& instruction_preprocess(std::string_view name,
-                                                    const FullInstructionEncoding& encoding,
-                                                    std::span<Operand const* const> operands);
+  const encoding::InstructionEncoding& preprocess_instruction(
+    std::string_view name,
+    const encoding::FullInstructionEncoding& encoding,
+    std::span<Operand const* const> operands);
   void finalize_encoding();
 
-  void encode_0(std::string_view name, const FullInstructionEncoding& encoding);
-  void encode_1(std::string_view name, const FullInstructionEncoding& encoding, const Operand& op0);
+  void encode_0(std::string_view name, const encoding::FullInstructionEncoding& encoding);
+  void encode_1(std::string_view name,
+                const encoding::FullInstructionEncoding& encoding,
+                const Operand& op0);
   void encode_2(std::string_view name,
-                const FullInstructionEncoding& encoding,
+                const encoding::FullInstructionEncoding& encoding,
                 const Operand& op0,
                 const Operand& op1);
 
@@ -173,20 +189,20 @@ class Assembler {
 #define STRINGIFY(x) STRINGIFY_HELPER(x)
 #define ENCODING_NAME(name) _asm_##name##_encoding
 
-#define DECLARE_INSTRUCTION_0(name)                            \
-  void name() {                                                \
-    extern const FullInstructionEncoding* ENCODING_NAME(name); \
-    encode_0(STRINGIFY(name), *ENCODING_NAME(name));           \
+#define DECLARE_INSTRUCTION_0(name)                                      \
+  void name() {                                                          \
+    extern const encoding::FullInstructionEncoding* ENCODING_NAME(name); \
+    encode_0(STRINGIFY(name), *ENCODING_NAME(name));                     \
   }
-#define DECLARE_INSTRUCTION_1(name)                            \
-  void name(const Operand& op0) {                              \
-    extern const FullInstructionEncoding* ENCODING_NAME(name); \
-    encode_1(STRINGIFY(name), *ENCODING_NAME(name), op0);      \
+#define DECLARE_INSTRUCTION_1(name)                                      \
+  void name(const Operand& op0) {                                        \
+    extern const encoding::FullInstructionEncoding* ENCODING_NAME(name); \
+    encode_1(STRINGIFY(name), *ENCODING_NAME(name), op0);                \
   }
-#define DECLARE_INSTRUCTION_2(name)                            \
-  void name(const Operand& op0, const Operand& op1) {          \
-    extern const FullInstructionEncoding* ENCODING_NAME(name); \
-    encode_2(STRINGIFY(name), *ENCODING_NAME(name), op0, op1); \
+#define DECLARE_INSTRUCTION_2(name)                                      \
+  void name(const Operand& op0, const Operand& op1) {                    \
+    extern const encoding::FullInstructionEncoding* ENCODING_NAME(name); \
+    encode_2(STRINGIFY(name), *ENCODING_NAME(name), op0, op1);           \
   }
 #define DECLARE_CONDITIONAL(jcc_name, cmov_name, setcc_name) \
   DECLARE_INSTRUCTION_1(jcc_name)                            \

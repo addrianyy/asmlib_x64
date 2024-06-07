@@ -1,6 +1,7 @@
 #include "InstructionEncoding.hpp"
 
 using namespace asmlib::x64;
+using namespace asmlib::x64::encoding;
 
 #define EXPORT_ENCODING(name)                                    \
   namespace asmlib::x64 {                                        \

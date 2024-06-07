@@ -37,6 +37,7 @@ static std::pair<bool, uint8_t> get_register_encoding(Register reg) {
 
 namespace asmlib::x64 {
 
+namespace detail {
 class EncodingGuard {
   Assembler* assembler;
 
@@ -44,6 +45,7 @@ class EncodingGuard {
   explicit EncodingGuard(Assembler* assembler) : assembler(assembler) {}
   ~EncodingGuard() { assembler->finalize_encoding(); }
 };
+}  // namespace detail
 
 template <typename T, typename U>
 static bool fits_within(U value) {
@@ -136,7 +138,7 @@ void Assembler::push_imm(Imm imm, size_t size) {
   }
 }
 
-void Assembler::push_bytes(const EncodingArray& array) {
+void Assembler::push_bytes(const encoding::Array& array) {
   bytes.reserve(array.size);
   for (size_t i = 0; i < array.size; ++i) {
     bytes.push_back(array.bytes[i]);
@@ -148,44 +150,44 @@ void Assembler::require_64bit() {
                  "this operation must be done with 64 bit operand size");
 }
 
-void Assembler::override_operand_size(const InstructionEncoding& encoding) {
+void Assembler::override_operand_size(const encoding::InstructionEncoding& encoding) {
   if (operand_size == OperandSize::Bits16) {
     switch (encoding.p66) {
-      case Prefix66Mode::Unusable:
+      case encoding::Prefix66Mode::Unusable:
         X64_ASM_ASSERT(false, "this operation cannot be done with 16 bit operand size");
         break;
 
-      case Prefix66Mode::Usable:
+      case encoding::Prefix66Mode::Usable:
         bytes.push_back(0x66);
         break;
 
-      case Prefix66Mode::Unneeded:
+      case encoding::Prefix66Mode::Unneeded:
       default:
         break;
     }
   }
 }
 
-bool Assembler::get_rexw(const InstructionEncoding& encoding) {
+bool Assembler::get_rexw(const encoding::InstructionEncoding& encoding) {
   switch (encoding.rexw) {
-    case RexwMode::Implicit:
+    case encoding::RexwMode::Implicit:
       // Instructions with implicit REX.W can possibly be encoded with 16 bit operand
       // size (but not 32).
-      if (operand_size == OperandSize::Bits16 && encoding.p66 == Prefix66Mode::Usable) {
+      if (operand_size == OperandSize::Bits16 && encoding.p66 == encoding::Prefix66Mode::Usable) {
         return false;
       }
 
       require_64bit();
       return false;
 
-    case RexwMode::ExplicitRequired:
+    case encoding::RexwMode::ExplicitRequired:
       require_64bit();
       return true;
 
-    case RexwMode::Usable:
+    case encoding::RexwMode::Usable:
       return operand_size == OperandSize::Bits64;
 
-    case RexwMode::Unneeded:
+    case encoding::RexwMode::Unneeded:
     default:
       return false;
   }
@@ -194,7 +196,7 @@ bool Assembler::get_rexw(const InstructionEncoding& encoding) {
 void Assembler::encode_memory_operand(uint8_t regop,
                                       bool rex_r,
                                       bool rex_w,
-                                      const EncodingArray& opcode,
+                                      const encoding::Array& opcode,
                                       Memory mem) {
   constexpr uint8_t rm_sib = 0b100;
   constexpr uint8_t rm_disp = 0b101;
@@ -362,8 +364,8 @@ void Assembler::encode_memory_operand(uint8_t regop,
 
 void Assembler::encode_regreg(Register reg1,
                               Register reg2,
-                              const Opcode& op,
-                              const InstructionEncoding& encoding) {
+                              const encoding::Opcode& op,
+                              const encoding::InstructionEncoding& encoding) {
   const auto [reg1_e, reg1_enc] = get_register_encoding(reg1);
   const auto [reg2_e, reg2_enc] = get_register_encoding(reg2);
 
@@ -376,8 +378,8 @@ void Assembler::encode_regreg(Register reg1,
 void Assembler::encode_regimm(Register reg,
                               Imm imm,
                               size_t size,
-                              const OpcodeDigit& op,
-                              const InstructionEncoding& encoding) {
+                              const encoding::OpcodeDigit& op,
+                              const encoding::InstructionEncoding& encoding) {
   const auto [reg_e, reg_enc] = get_register_encoding(reg);
 
   override_operand_size(encoding);
@@ -389,8 +391,8 @@ void Assembler::encode_regimm(Register reg,
 
 void Assembler::encode_memreg_regmem(Register reg,
                                      Memory mem,
-                                     const Opcode& op,
-                                     const InstructionEncoding& encoding) {
+                                     const encoding::Opcode& op,
+                                     const encoding::InstructionEncoding& encoding) {
   const auto [reg_e, reg_enc] = get_register_encoding(reg);
 
   override_operand_size(encoding);
@@ -400,21 +402,23 @@ void Assembler::encode_memreg_regmem(Register reg,
 void Assembler::encode_memimm(Memory mem,
                               Imm imm,
                               size_t size,
-                              const OpcodeDigit& op,
-                              const InstructionEncoding& encoding) {
+                              const encoding::OpcodeDigit& op,
+                              const encoding::InstructionEncoding& encoding) {
   override_operand_size(encoding);
   encode_memory_operand(op.digit, false, get_rexw(encoding), op.op, mem);
   push_imm(imm, size);
 }
 
-void Assembler::encode_mem(Memory mem, const OpcodeDigit& op, const InstructionEncoding& encoding) {
+void Assembler::encode_mem(Memory mem,
+                           const encoding::OpcodeDigit& op,
+                           const encoding::InstructionEncoding& encoding) {
   override_operand_size(encoding);
   encode_memory_operand(op.digit, false, get_rexw(encoding), op.op, mem);
 }
 
 void Assembler::encode_reg(Register reg,
-                           const OpcodeDigit& op,
-                           const InstructionEncoding& encoding) {
+                           const encoding::OpcodeDigit& op,
+                           const encoding::InstructionEncoding& encoding) {
   const auto [reg_e, reg_enc] = get_register_encoding(reg);
 
   override_operand_size(encoding);
@@ -425,15 +429,16 @@ void Assembler::encode_reg(Register reg,
 
 void Assembler::encode_imm(Imm imm,
                            size_t size,
-                           const Opcode& op,
-                           const InstructionEncoding& encoding) {
+                           const encoding::Opcode& op,
+                           const encoding::InstructionEncoding& encoding) {
   override_operand_size(encoding);
   push_rex(get_rexw(encoding), false, false, false);
   push_bytes(op.op);
   push_imm(imm, size);
 }
 
-void Assembler::encode_standalone(const Opcode& op, const InstructionEncoding& encoding) {
+void Assembler::encode_standalone(const encoding::Opcode& op,
+                                  const encoding::InstructionEncoding& encoding) {
   override_operand_size(encoding);
   push_rex(get_rexw(encoding), false, false, false);
   push_bytes(op.op);
@@ -441,9 +446,10 @@ void Assembler::encode_standalone(const Opcode& op, const InstructionEncoding& e
 
 void Assembler::encode_rel32(int32_t rel,
                              Label label,
-                             const Opcode& op,
-                             const InstructionEncoding& encoding) {
-  X64_ASM_ASSERT(encoding.rexw == RexwMode::Unneeded && encoding.p66 == Prefix66Mode::Unneeded,
+                             const encoding::Opcode& op,
+                             const encoding::InstructionEncoding& encoding) {
+  X64_ASM_ASSERT(encoding.rexw == encoding::RexwMode::Unneeded &&
+                   encoding.p66 == encoding::Prefix66Mode::Unneeded,
                  "relative jumps/calls should not need REX or 66 prefix");
 
   encode_imm(rel, sizeof(rel), op, encoding);
@@ -461,8 +467,8 @@ void Assembler::encode_rel32(int32_t rel,
 
 void Assembler::encode_regimm64(Register reg,
                                 Imm imm,
-                                const OpcodeRegadd& op,
-                                const InstructionEncoding& encoding) {
+                                const encoding::OpcodeRegadd& op,
+                                const encoding::InstructionEncoding& encoding) {
   require_64bit();
 
   const auto [reg_e, reg_enc] = get_register_encoding(reg);
@@ -475,9 +481,9 @@ void Assembler::encode_regimm64(Register reg,
   push_imm(imm, 8);
 }
 
-const InstructionEncoding& Assembler::instruction_preprocess(
+const encoding::InstructionEncoding& Assembler::preprocess_instruction(
   std::string_view name,
-  const FullInstructionEncoding& full_encoding,
+  const encoding::FullInstructionEncoding& full_encoding,
   std::span<Operand const* const> operands) {
   if (operand_size == OperandSize::Bits8) {
     const auto& e = full_encoding.encoding_8bit;
@@ -520,10 +526,11 @@ void Assembler::finalize_encoding() {
   }
 }
 
-void Assembler::encode_0(std::string_view name, const FullInstructionEncoding& full_encoding) {
-  EncodingGuard guard(this);
+void Assembler::encode_0(std::string_view name,
+                         const encoding::FullInstructionEncoding& full_encoding) {
+  detail::EncodingGuard guard(this);
 
-  const auto encoding = instruction_preprocess(name, full_encoding, {});
+  const auto encoding = preprocess_instruction(name, full_encoding, {});
 
   if (encoding.standalone) {
     encode_standalone(*encoding.standalone, encoding);
@@ -534,14 +541,14 @@ void Assembler::encode_0(std::string_view name, const FullInstructionEncoding& f
 }
 
 void Assembler::encode_1(std::string_view name,
-                         const FullInstructionEncoding& full_encoding,
+                         const encoding::FullInstructionEncoding& full_encoding,
                          const Operand& op0) {
   using OpTy = Operand::Type;
 
-  EncodingGuard guard(this);
+  detail::EncodingGuard guard(this);
 
   std::array operands{&op0};
-  const auto encoding = instruction_preprocess(name, full_encoding, operands);
+  const auto encoding = preprocess_instruction(name, full_encoding, operands);
 
   switch (op0.get_type()) {
     case OpTy::Register:
@@ -589,15 +596,15 @@ void Assembler::encode_1(std::string_view name,
 }
 
 void Assembler::encode_2(std::string_view name,
-                         const FullInstructionEncoding& full_encoding,
+                         const encoding::FullInstructionEncoding& full_encoding,
                          const Operand& op0,
                          const Operand& op1) {
   using OpTy = Operand::Type;
 
-  EncodingGuard guard(this);
+  detail::EncodingGuard guard(this);
 
   std::array operands{&op0, &op1};
-  const auto encoding = instruction_preprocess(name, full_encoding, operands);
+  const auto encoding = preprocess_instruction(name, full_encoding, operands);
 
   constexpr auto get_combination = [](OpTy first, OpTy second) -> uint32_t {
     constexpr uint32_t code_shift = 8;
