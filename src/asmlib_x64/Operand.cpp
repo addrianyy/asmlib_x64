@@ -41,4 +41,22 @@ Label Memory::get_label() const {
   return label_;
 }
 
+const Register* Operand::get_reg() const {
+  return type == Type::Register ? &op.reg : nullptr;
+}
+const Imm* Operand::get_imm() const {
+  return type == Type::Immediate ? &op.imm : nullptr;
+}
+const Memory* Operand::get_memory() const {
+  return type == Type::Memory ? &op.mem : nullptr;
+}
+const Label* Operand::get_label() const {
+  return type == Type::Label ? &op.label : nullptr;
+}
+
+Operand::Operand(Register reg) : type(Type::Register), op(reg) {}
+Operand::Operand(Imm imm) : type(Type::Immediate), op(imm) {}
+Operand::Operand(Label label) : type(Type::Label), op(label) {}
+Operand::Operand(Memory memory) : type(Type::Memory), op(memory) {}
+
 }  // namespace asmlib::x64

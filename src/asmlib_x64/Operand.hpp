@@ -115,21 +115,39 @@ class Operand {
   };
 
  private:
-  std::variant<Register, Imm, Memory, Label> op;
-  Type type;
+  static_assert(std::is_trivially_destructible_v<Register> &&
+                  std::is_trivially_destructible_v<Imm> &&
+                  std::is_trivially_destructible_v<Memory> &&
+                  std::is_trivially_destructible_v<Label>,
+                "operand types must be trivially destructible");
 
-  const Register* get_reg() const { return std::get_if<Register>(&op); }
-  const Imm* get_imm() const { return std::get_if<Imm>(&op); }
-  const Memory* get_memory() const { return std::get_if<Memory>(&op); }
-  const Label* get_label() const { return std::get_if<Label>(&op); }
+  union OperandContainer {
+    Register reg;
+    Imm imm;
+    Memory mem;
+    Label label;
+
+    explicit OperandContainer(Register reg) : reg(reg) {}
+    explicit OperandContainer(Imm imm) : imm(imm) {}
+    explicit OperandContainer(Memory mem) : mem(mem) {}
+    explicit OperandContainer(Label label) : label(label) {}
+  };
+
+  Type type;
+  OperandContainer op;
+
+  const Register* get_reg() const;
+  const Imm* get_imm() const;
+  const Memory* get_memory() const;
+  const Label* get_label() const;
 
   Type get_type() const { return type; }
 
  public:
-  Operand(Register reg) : op(reg), type(Type::Register) {}
-  Operand(Imm imm) : op(imm), type(Type::Immediate) {}
-  Operand(Label label) : op(label), type(Type::Label) {}
-  Operand(Memory memory) : op(memory), type(Type::Memory) {}
+  Operand(Register reg);
+  Operand(Imm imm);
+  Operand(Label label);
+  Operand(Memory memory);
 
   static Operand reg(Register reg) { return Operand(reg); }
   static Operand imm(Imm imm) { return Operand(imm); }
