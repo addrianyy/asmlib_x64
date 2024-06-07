@@ -1,6 +1,8 @@
 #include "Assembler.hpp"
 #include "InstructionEncoding.hpp"
 
+#include <limits>
+
 #if __has_include(<base/Error.hpp> )
 #include <base/Error.hpp>
 #define X64_ASM_ASSERT verify
@@ -22,50 +24,15 @@ using namespace asmlib::x64;
 
 constexpr uint8_t modrm_mod_direct = 0b11;
 
-static std::pair<bool, uint8_t> get_register_encoding(Register reg) {
-  switch (reg) {
-    case Register::Rax:
-      return {false, 0b000};
-    case Register::Rbx:
-      return {false, 0b011};
-    case Register::Rcx:
-      return {false, 0b001};
-    case Register::Rdx:
-      return {false, 0b010};
-    case Register::Rsp:
-      return {false, 0b100};
-    case Register::Rbp:
-      return {false, 0b101};
-    case Register::Rsi:
-      return {false, 0b110};
-    case Register::Rdi:
-      return {false, 0b111};
-    case Register::R8:
-      return {true, 0b000};
-    case Register::R9:
-      return {true, 0b001};
-    case Register::R10:
-      return {true, 0b010};
-    case Register::R11:
-      return {true, 0b011};
-    case Register::R12:
-      return {true, 0b100};
-    case Register::R13:
-      return {true, 0b101};
-    case Register::R14:
-      return {true, 0b110};
-    case Register::R15:
-      return {true, 0b111};
-    default:
-      return {false, 0b000};
-  }
-}
-
-static bool get_register_ext(Register reg) {
-  return get_register_encoding(reg).first;
+static bool is_register_extended(Register reg) {
+  return uint32_t(reg) >= uint32_t(Register::R8);
 }
 static uint8_t get_register_id(Register reg) {
-  return get_register_encoding(reg).second;
+  return uint32_t(reg) & 0b111;
+}
+
+static std::pair<bool, uint8_t> get_register_encoding(Register reg) {
+  return {is_register_extended(reg), get_register_id(reg)};
 }
 
 namespace asmlib::x64 {
@@ -75,8 +42,40 @@ class EncodingGuard {
 
  public:
   explicit EncodingGuard(Assembler* assembler) : assembler(assembler) {}
-  ~EncodingGuard() { assembler->on_encoding_end(); }
+  ~EncodingGuard() { assembler->finalize_encoding(); }
 };
+
+template <typename T, typename U>
+static bool fits_within(U value) {
+  using Limits = std::numeric_limits<T>;
+  const auto v = int64_t(value);
+  return v <= int64_t(Limits::max()) && v >= int64_t(Limits::min());
+}
+
+/// Check if value fits within imm32 adjusted for operand size.
+template <typename T>
+static bool fits_within_imm32(OperandSize operand_size, T value) {
+  switch (operand_size) {
+    case OperandSize::Bits8:
+      return fits_within<int8_t>(value);
+    case OperandSize::Bits16:
+      return fits_within<int16_t>(value);
+    default:
+      return fits_within<int32_t>(value);
+  }
+}
+
+/// Get imm32 size adjusted for operand size.
+static size_t get_imm32_size(OperandSize operand_size) {
+  switch (operand_size) {
+    case OperandSize::Bits8:
+      return 1;
+    case OperandSize::Bits16:
+      return 2;
+    default:
+      return 4;
+  }
+}
 
 void Assembler::push_rex(bool w, bool r, bool x, bool b) {
   // Usually REX without any attributes doesn't need to be emited because it doesn't
@@ -212,7 +211,7 @@ void Assembler::encode_memory_operand(uint8_t regop,
     // We don't know instruction end offset yet. It will be filled after encoding.
     const auto rel32_offset = bytes.size();
     fixups.push_back(Fixup{label, rel32_offset, 0});
-    pending_fixup_fill = true;
+    unfinished_fixup = true;
 
     // empty rel32 - will be filled by apply_fixups
     push_value(int32_t(0));
@@ -275,8 +274,8 @@ void Assembler::encode_memory_operand(uint8_t regop,
     disp && *disp >= int32_t(ByteLimits::min()) && *disp <= int32_t(ByteLimits::max());
 
   // If registers are not present they don't need extension in REX by default.
-  const bool rex_b = base && get_register_ext(*base);
-  const bool rex_x = index && get_register_ext(index->index);
+  const bool rex_b = base && is_register_extended(*base);
+  const bool rex_x = index && is_register_extended(index->index);
 
   push_rex(rex_w, rex_r, rex_x, rex_b);
   push_bytes(opcode);
@@ -476,29 +475,25 @@ void Assembler::encode_regimm64(Register reg,
   push_imm(imm, 8);
 }
 
-const struct InstructionEncoding& Assembler::instruction_preprocess(
+const InstructionEncoding& Assembler::instruction_preprocess(
   std::string_view name,
   const FullInstructionEncoding& full_encoding,
-  const Operand** operands,
-  size_t operands_count) {
-  const InstructionEncoding& encoding = [&]() -> const InstructionEncoding& {
-    if (operand_size == OperandSize::Bits8) {
-      X64_ASM_ASSERT(!!full_encoding.encoding_8bit,
-                     "this instruction doesn't support 8 bit operand size");
-      X64_ASM_ASSERT(full_encoding.encoding_8bit->fix_8bit, "8 bit fix must be enabled");
+  std::span<Operand const* const> operands) {
+  if (operand_size == OperandSize::Bits8) {
+    const auto& e = full_encoding.encoding_8bit;
+    X64_ASM_ASSERT(!!e, "this instruction doesn't support 8 bit operand size");
+    X64_ASM_ASSERT(e->fix_8bit, "8 bit fix must be enabled");
+  }
 
-      return *full_encoding.encoding_8bit;
-    }
-
-    return full_encoding.encoding_normal;
-  }();
+  const auto& encoding = operand_size == OperandSize::Bits8 ? *full_encoding.encoding_8bit
+                                                            : full_encoding.encoding_normal;
 
   force_rex = false;
 
   // Make sure that we encode proper 8 bit register operands.
   if (encoding.fix_8bit) {
-    for (size_t i = 0; i < operands_count; ++i) {
-      if (const auto reg = operands[i]->get_reg()) {
+    for (const auto& operand : operands) {
+      if (const auto reg = operand->get_reg()) {
         const auto r = *reg;
 
         // For this registers to be encoded with 8 bit size REX prefix
@@ -514,21 +509,21 @@ const struct InstructionEncoding& Assembler::instruction_preprocess(
   return encoding;
 }
 
-void Assembler::on_encoding_end() {
-  if (pending_fixup_fill) {
+void Assembler::finalize_encoding() {
+  if (unfinished_fixup) {
     auto& fixup = fixups[fixups.size() - 1];
 
-    X64_ASM_ASSERT(fixup.end_offset == 0, "fixup fill is pending but end offset isn't 0");
+    X64_ASM_ASSERT(fixup.end_offset == 0, "last fixup is unfinished but end offset isn't 0");
 
     fixup.end_offset = bytes.size();
-    pending_fixup_fill = false;
+    unfinished_fixup = false;
   }
 }
 
 void Assembler::encode_0(std::string_view name, const FullInstructionEncoding& full_encoding) {
   EncodingGuard guard(this);
 
-  const auto encoding = instruction_preprocess(name, full_encoding, nullptr, 0);
+  const auto encoding = instruction_preprocess(name, full_encoding, {});
 
   if (encoding.standalone) {
     encode_standalone(*encoding.standalone, encoding);
@@ -546,8 +541,7 @@ void Assembler::encode_1(std::string_view name,
   EncodingGuard guard(this);
 
   std::array operands{&op0};
-  const auto encoding =
-    instruction_preprocess(name, full_encoding, operands.data(), operands.size());
+  const auto encoding = instruction_preprocess(name, full_encoding, operands);
 
   switch (op0.get_type()) {
     case OpTy::Register:
@@ -579,8 +573,8 @@ void Assembler::encode_1(std::string_view name,
         return;
       }
 
-      if (fits_within_imm32(imm) && encoding.imm32) {
-        encode_imm(imm, get_imm32_size(), *encoding.imm32, encoding);
+      if (fits_within_imm32(operand_size, imm) && encoding.imm32) {
+        encode_imm(imm, get_imm32_size(operand_size), *encoding.imm32, encoding);
         return;
       }
 
@@ -603,8 +597,7 @@ void Assembler::encode_2(std::string_view name,
   EncodingGuard guard(this);
 
   std::array operands{&op0, &op1};
-  const auto encoding =
-    instruction_preprocess(name, full_encoding, operands.data(), operands.size());
+  const auto encoding = instruction_preprocess(name, full_encoding, operands);
 
   constexpr auto get_combination = [](OpTy first, OpTy second) -> uint32_t {
     constexpr uint32_t code_shift = 8;
@@ -659,8 +652,8 @@ void Assembler::encode_2(std::string_view name,
         return;
       }
 
-      if (fits_within_imm32(imm) && encoding.regimm32) {
-        encode_regimm(reg, imm, get_imm32_size(), *encoding.regimm32, encoding);
+      if (fits_within_imm32(operand_size, imm) && encoding.regimm32) {
+        encode_regimm(reg, imm, get_imm32_size(operand_size), *encoding.regimm32, encoding);
         return;
       }
 
@@ -686,8 +679,8 @@ void Assembler::encode_2(std::string_view name,
         return;
       }
 
-      if (fits_within_imm32(imm) && encoding.memimm32) {
-        encode_memimm(mem, imm, get_imm32_size(), *encoding.memimm32, encoding);
+      if (fits_within_imm32(operand_size, imm) && encoding.memimm32) {
+        encode_memimm(mem, imm, get_imm32_size(operand_size), *encoding.memimm32, encoding);
         return;
       }
 

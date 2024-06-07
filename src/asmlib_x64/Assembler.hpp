@@ -2,7 +2,6 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
-#include <limits>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -10,6 +9,13 @@
 #include "Operand.hpp"
 
 namespace asmlib::x64 {
+
+struct EncodingArray;
+struct FullInstructionEncoding;
+struct InstructionEncoding;
+struct Opcode;
+struct OpcodeDigit;
+struct OpcodeRegadd;
 
 enum class OperandSize {
   Bits8 = 8,
@@ -34,47 +40,13 @@ class Assembler {
   OperandSize operand_size = OperandSize::Bits64;
 
   bool force_rex = false;
-  bool pending_fixup_fill = false;
-
-  template <typename T, typename U>
-  static bool fits_within(U value) {
-    using Limits = std::numeric_limits<T>;
-    const int64_t v = int64_t(value);
-    return v <= int64_t(Limits::max()) && v >= int64_t(Limits::min());
-  }
-
-  /// Check if value fits within imm32 adjusted for operand size.
-  template <typename T>
-  bool fits_within_imm32(T value) const {
-    switch (operand_size) {
-      case OperandSize::Bits8:
-        return fits_within<int8_t>(value);
-
-      case OperandSize::Bits16:
-        return fits_within<int16_t>(value);
-
-      default:
-        return fits_within<int32_t>(value);
-    }
-  }
-
-  /// Get imm32 size adjusted for operand size.
-  size_t get_imm32_size() const {
-    switch (operand_size) {
-      case OperandSize::Bits8:
-        return 1;
-      case OperandSize::Bits16:
-        return 2;
-      default:
-        return 4;
-    }
-  }
+  bool unfinished_fixup = false;
 
   void push_rex(bool w, bool r, bool x, bool b);
   void push_modrm(uint8_t mod, uint8_t reg, uint8_t rm);
   void push_sib(uint8_t base, uint8_t index, uint8_t scale);
   void push_imm(Imm imm, size_t size);
-  void push_bytes(const struct EncodingArray& array);
+  void push_bytes(const EncodingArray& array);
 
   template <typename T>
   void push_value(T value) {
@@ -95,73 +67,62 @@ class Assembler {
   }
 
   void require_64bit();
-  void override_operand_size(const struct InstructionEncoding& encoding);
-  bool get_rexw(const struct InstructionEncoding& encoding);
+  void override_operand_size(const InstructionEncoding& encoding);
+  bool get_rexw(const InstructionEncoding& encoding);
 
   void encode_memory_operand(uint8_t regop,
                              bool rex_r,
                              bool rex_w,
-                             const struct EncodingArray& opcode,
+                             const EncodingArray& opcode,
                              Memory mem);
 
   void encode_regreg(Register reg1,
                      Register reg2,
-                     const struct Opcode& op,
-                     const struct InstructionEncoding& encoding);
+                     const Opcode& op,
+                     const InstructionEncoding& encoding);
   void encode_regimm(Register reg,
                      Imm imm,
                      size_t size,
-                     const struct OpcodeDigit& op,
-                     const struct InstructionEncoding& encoding);
+                     const OpcodeDigit& op,
+                     const InstructionEncoding& encoding);
   void encode_memreg_regmem(Register reg,
                             Memory mem,
-                            const struct Opcode& op,
-                            const struct InstructionEncoding& encoding);
+                            const Opcode& op,
+                            const InstructionEncoding& encoding);
   void encode_memimm(Memory mem,
                      Imm imm,
                      size_t size,
-                     const struct OpcodeDigit& op,
-                     const struct InstructionEncoding& encoding);
-  void encode_mem(Memory mem,
-                  const struct OpcodeDigit& op,
-                  const struct InstructionEncoding& encoding);
-  void encode_reg(Register reg,
-                  const struct OpcodeDigit& op,
-                  const struct InstructionEncoding& encoding);
-  void encode_imm(Imm imm,
-                  size_t size,
-                  const struct Opcode& op,
-                  const struct InstructionEncoding& encoding);
-  void encode_standalone(const struct Opcode& op, const struct InstructionEncoding& encoding);
+                     const OpcodeDigit& op,
+                     const InstructionEncoding& encoding);
+  void encode_mem(Memory mem, const OpcodeDigit& op, const InstructionEncoding& encoding);
+  void encode_reg(Register reg, const OpcodeDigit& op, const InstructionEncoding& encoding);
+  void encode_imm(Imm imm, size_t size, const Opcode& op, const InstructionEncoding& encoding);
+  void encode_standalone(const Opcode& op, const InstructionEncoding& encoding);
   void encode_rel32(int32_t rel,
                     Label label,
-                    const struct Opcode& op,
-                    const struct InstructionEncoding& encoding);
+                    const Opcode& op,
+                    const InstructionEncoding& encoding);
   void encode_regimm64(Register reg,
                        Imm imm,
-                       const struct OpcodeRegadd& op,
-                       const struct InstructionEncoding& encoding);
+                       const OpcodeRegadd& op,
+                       const InstructionEncoding& encoding);
 
-  const struct InstructionEncoding& instruction_preprocess(
-    std::string_view name,
-    const struct FullInstructionEncoding& encoding,
-    const Operand** operands,
-    size_t operands_count);
-  void on_encoding_end();
+  const InstructionEncoding& instruction_preprocess(std::string_view name,
+                                                    const FullInstructionEncoding& encoding,
+                                                    std::span<Operand const* const> operands);
+  void finalize_encoding();
 
-  void encode_0(std::string_view name, const struct FullInstructionEncoding& encoding);
-  void encode_1(std::string_view name,
-                const struct FullInstructionEncoding& encoding,
-                const Operand& op0);
+  void encode_0(std::string_view name, const FullInstructionEncoding& encoding);
+  void encode_1(std::string_view name, const FullInstructionEncoding& encoding, const Operand& op0);
   void encode_2(std::string_view name,
-                const struct FullInstructionEncoding& encoding,
+                const FullInstructionEncoding& encoding,
                 const Operand& op0,
                 const Operand& op1);
 
   void apply_fixups();
 
  public:
-  explicit Assembler(OperandSize size = OperandSize::Bits64) : operand_size(size) {}
+  Assembler() = default;
 
   void set_operand_size(OperandSize size) { operand_size = size; }
 

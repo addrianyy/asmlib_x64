@@ -8,9 +8,9 @@ namespace asmlib::x64 {
 
 enum class Register : uint8_t {
   Rax,
-  Rbx,
   Rcx,
   Rdx,
+  Rbx,
   Rsp,
   Rbp,
   Rsi,
@@ -107,7 +107,7 @@ class Operand {
   friend class Assembler;
 
  public:
-  enum class Type {
+  enum class Type : uint8_t {
     Register,
     Immediate,
     Memory,

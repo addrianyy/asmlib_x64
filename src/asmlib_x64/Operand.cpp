@@ -19,7 +19,7 @@ Memory::Memory(std::optional<Register> base,
 Memory::Memory(Label label) : label_(label) {}
 
 std::optional<Register> Memory::get_base() const {
-  return index_ == detail::invalid_register ? std::nullopt : std::optional(index_);
+  return base_ == detail::invalid_register ? std::nullopt : std::optional(base_);
 }
 
 std::optional<Memory::IndexScale> Memory::get_index() const {
