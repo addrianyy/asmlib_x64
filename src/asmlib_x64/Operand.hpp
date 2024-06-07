@@ -6,7 +6,7 @@
 
 namespace asmlib::x64 {
 
-enum class Register {
+enum class Register : uint8_t {
   Rax,
   Rbx,
   Rcx,
@@ -24,6 +24,13 @@ enum class Register {
   R14,
   R15,
 };
+
+namespace detail {
+
+constexpr Register invalid_register =
+  Register(std::numeric_limits<std::underlying_type_t<Register>>::max());
+
+}
 
 using Imm = int64_t;
 
@@ -51,48 +58,47 @@ class Memory {
   };
 
  private:
-  std::optional<Register> base_;
-  std::optional<IndexScale> index_scale_;
+  Register base_ = detail::invalid_register;
+  Register index_ = detail::invalid_register;
+  uint8_t scale_ = 0;
   int32_t displacement_ = 0;
 
-  std::optional<Label> label_;
+  Label label_;
 
   explicit Memory(std::optional<Register> base,
                   std::optional<IndexScale> index_scale = std::nullopt,
-                  int32_t displacement = 0)
-      : base_(base), index_scale_(index_scale), displacement_(displacement) {}
+                  int32_t displacement = 0);
 
-  explicit Memory(Label label) : label_(label) {}
+  explicit Memory(Label label);
 
-  std::optional<Register> get_base() const { return base_; }
-  std::optional<IndexScale> get_index() const { return index_scale_; }
-  int32_t get_displacement() const { return displacement_; }
-
-  std::optional<Label> get_label() const { return label_; }
+  std::optional<Register> get_base() const;
+  std::optional<IndexScale> get_index() const;
+  int32_t get_displacement() const;
+  Label get_label() const;
 
  public:
-  static inline Memory label(Label label) { return Memory(label); }
+  static Memory label(Label label) { return Memory(label); }
 
-  static inline Memory base(Register base) { return Memory(base); }
-  static inline Memory index(Register index, uint32_t scale) {
+  static Memory base(Register base) { return Memory(base); }
+  static Memory index(Register index, uint32_t scale) {
     return Memory(std::nullopt, IndexScale{index, scale});
   }
-  static inline Memory disp(int32_t displacement) {
+  static Memory disp(int32_t displacement) {
     return Memory(std::nullopt, std::nullopt, displacement);
   }
-  static inline Memory base_index(Register base, Register index, uint32_t scale) {
+  static Memory base_index(Register base, Register index, uint32_t scale) {
     return Memory(base, IndexScale{index, scale});
   }
-  static inline Memory base_disp(Register base, int32_t displacement) {
+  static Memory base_disp(Register base, int32_t displacement) {
     return Memory(base, std::nullopt, displacement);
   }
-  static inline Memory index_disp(Register index, uint32_t scale, int32_t displacement) {
+  static Memory index_disp(Register index, uint32_t scale, int32_t displacement) {
     return Memory(std::nullopt, IndexScale{index, scale}, displacement);
   }
-  static inline Memory base_index_disp(Register base,
-                                       Register index,
-                                       uint32_t scale,
-                                       int32_t displacement) {
+  static Memory base_index_disp(Register base,
+                                Register index,
+                                uint32_t scale,
+                                int32_t displacement) {
     return Memory(base, IndexScale{index, scale}, displacement);
   }
 };
@@ -125,10 +131,10 @@ class Operand {
   Operand(Label label) : op(label), type(Type::Label) {}
   Operand(Memory memory) : op(memory), type(Type::Memory) {}
 
-  static inline Operand reg(Register reg) { return Operand(reg); }
-  static inline Operand imm(Imm imm) { return Operand(imm); }
-  static inline Operand label(Label label) { return Operand(label); }
-  static inline Operand memory(Memory memory) { return Operand(memory); }
+  static Operand reg(Register reg) { return Operand(reg); }
+  static Operand imm(Imm imm) { return Operand(imm); }
+  static Operand label(Label label) { return Operand(label); }
+  static Operand memory(Memory memory) { return Operand(memory); }
 };
 
 }  // namespace asmlib::x64

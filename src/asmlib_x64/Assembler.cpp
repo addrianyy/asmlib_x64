@@ -200,7 +200,7 @@ void Assembler::encode_memory_operand(uint8_t regop,
   constexpr uint8_t rm_sib = 0b100;
   constexpr uint8_t rm_disp = 0b101;
 
-  if (const auto& label = mem.get_label(); label) {
+  if (const auto label = mem.get_label()) {
     X64_ASM_ASSERT(label, "cannot use uninitialized label as memory operand");
 
     // Use RIP relative addressing to refer to the label.
@@ -211,7 +211,7 @@ void Assembler::encode_memory_operand(uint8_t regop,
 
     // We don't know instruction end offset yet. It will be filled after encoding.
     const auto rel32_offset = bytes.size();
-    fixups.push_back(Fixup{*label, rel32_offset, 0});
+    fixups.push_back(Fixup{label, rel32_offset, 0});
     pending_fixup_fill = true;
 
     // empty rel32 - will be filled by apply_fixups
