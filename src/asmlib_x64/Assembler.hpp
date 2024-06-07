@@ -74,7 +74,7 @@ class Assembler {
   void push_modrm(uint8_t mod, uint8_t reg, uint8_t rm);
   void push_sib(uint8_t base, uint8_t index, uint8_t scale);
   void push_imm(Imm imm, size_t size);
-  void push_bytes(const struct SmallArray& array);
+  void push_bytes(const struct EncodingArray& array);
 
   template <typename T>
   void push_value(T value) {
@@ -101,7 +101,7 @@ class Assembler {
   void encode_memory_operand(uint8_t regop,
                              bool rex_r,
                              bool rex_w,
-                             const struct SmallArray& opcode,
+                             const struct EncodingArray& opcode,
                              Memory mem);
 
   void encode_regreg(Register reg1,

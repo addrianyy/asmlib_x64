@@ -137,7 +137,7 @@ void Assembler::push_imm(Imm imm, size_t size) {
   }
 }
 
-void Assembler::push_bytes(const SmallArray& array) {
+void Assembler::push_bytes(const EncodingArray& array) {
   bytes.reserve(array.size);
   for (size_t i = 0; i < array.size; ++i) {
     bytes.push_back(array.bytes[i]);
@@ -195,7 +195,7 @@ bool Assembler::get_rexw(const InstructionEncoding& encoding) {
 void Assembler::encode_memory_operand(uint8_t regop,
                                       bool rex_r,
                                       bool rex_w,
-                                      const SmallArray& opcode,
+                                      const EncodingArray& opcode,
                                       Memory mem) {
   constexpr uint8_t rm_sib = 0b100;
   constexpr uint8_t rm_disp = 0b101;

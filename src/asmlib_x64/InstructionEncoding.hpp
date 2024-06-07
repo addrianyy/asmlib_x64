@@ -1,58 +1,69 @@
 #pragma once
 #include <cstdint>
 #include <initializer_list>
-#include <optional>
+#include <utility>
 
 namespace asmlib::x64 {
 
+namespace detail {
+void trigger_consteval_failure(char const* message);
+}
+
 template <typename T>
-struct TrivialOptional {
+struct EncodingOptional {
   T value{};
   bool has_value{false};
 
-  constexpr TrivialOptional() = default;
-  constexpr TrivialOptional(T value) : value(value), has_value(true) {}
+  consteval EncodingOptional() = default;
+  consteval EncodingOptional(T value) : value(std::move(value)), has_value(true) {}
 
   constexpr operator bool() const { return has_value; }
   constexpr const T* operator->() const { return &value; }
   constexpr const T& operator*() const { return value; }
 };
 
-enum class RexwMode {
+struct EncodingArray {
+  // Increase when needed.
+  constexpr static size_t Capacity = 2;
+
+  uint8_t bytes[Capacity]{};
+  uint8_t size = 0;
+
+  consteval EncodingArray(std::initializer_list<uint8_t> elements) {
+    if (elements.size() > Capacity) {
+      detail::trigger_consteval_failure("overflowed SmallArray");
+    }
+
+    for (const auto element : elements) {
+      bytes[size++] = element;
+    }
+  }
+};
+
+enum class RexwMode : uint8_t {
   ExplicitRequired,
   Implicit,
   Usable,
   Unneeded,
 };
 
-enum class Prefix66Mode {
+enum class Prefix66Mode : uint8_t {
   Unusable,
   Usable,
   Unneeded,
 };
 
-struct SmallArray {
-  uint8_t bytes[15]{};
-  size_t size = 0;
-
-  constexpr SmallArray(std::initializer_list<uint8_t> list) {
-    for (auto element : list) {
-      bytes[size++] = element;
-    }
-  }
-};
-
 struct Opcode {
-  SmallArray op;
+  EncodingArray op;
 };
 
 struct OpcodeDigit {
-  SmallArray op;
+  EncodingArray op;
   uint8_t digit;
 };
 
 struct OpcodeRegadd {
-  SmallArray op;
+  EncodingArray op;
 };
 
 struct InstructionEncoding {
@@ -63,42 +74,42 @@ struct InstructionEncoding {
   bool fix_8bit = false;
 
   /// r64, r/m64
-  TrivialOptional<Opcode> regreg;
+  EncodingOptional<Opcode> regreg;
 
   /// r/m64, r64
-  TrivialOptional<Opcode> regreg_inv;
+  EncodingOptional<Opcode> regreg_inv;
 
-  TrivialOptional<OpcodeDigit> regimm32;
-  TrivialOptional<OpcodeDigit> memimm32;
-  TrivialOptional<OpcodeDigit> regimm8;
-  TrivialOptional<OpcodeDigit> memimm8;
-  TrivialOptional<OpcodeDigit> reguimm8;
-  TrivialOptional<OpcodeDigit> memuimm8;
-  TrivialOptional<Opcode> regmem;
-  TrivialOptional<Opcode> memreg;
-  TrivialOptional<OpcodeDigit> regcl;
-  TrivialOptional<OpcodeDigit> memcl;
-  TrivialOptional<OpcodeDigit> reg;
-  TrivialOptional<OpcodeDigit> mem;
-  TrivialOptional<Opcode> rel32;
-  TrivialOptional<Opcode> imm32;
-  TrivialOptional<Opcode> uimm16;
-  TrivialOptional<OpcodeRegadd> regimm64;
-  TrivialOptional<Opcode> standalone;
+  EncodingOptional<OpcodeDigit> regimm32;
+  EncodingOptional<OpcodeDigit> memimm32;
+  EncodingOptional<OpcodeDigit> regimm8;
+  EncodingOptional<OpcodeDigit> memimm8;
+  EncodingOptional<OpcodeDigit> reguimm8;
+  EncodingOptional<OpcodeDigit> memuimm8;
+  EncodingOptional<Opcode> regmem;
+  EncodingOptional<Opcode> memreg;
+  EncodingOptional<OpcodeDigit> regcl;
+  EncodingOptional<OpcodeDigit> memcl;
+  EncodingOptional<OpcodeDigit> reg;
+  EncodingOptional<OpcodeDigit> mem;
+  EncodingOptional<Opcode> rel32;
+  EncodingOptional<Opcode> imm32;
+  EncodingOptional<Opcode> uimm16;
+  EncodingOptional<OpcodeRegadd> regimm64;
+  EncodingOptional<Opcode> standalone;
 };
 
 struct FullInstructionEncoding {
   InstructionEncoding encoding_normal;
-  TrivialOptional<InstructionEncoding> encoding_8bit;
+  EncodingOptional<InstructionEncoding> encoding_8bit;
 
-  explicit constexpr FullInstructionEncoding(
-    InstructionEncoding normal,
-    TrivialOptional<InstructionEncoding> _8bit = TrivialOptional<InstructionEncoding>{})
+  explicit consteval FullInstructionEncoding(InstructionEncoding normal,
+                                             EncodingOptional<InstructionEncoding> _8bit = {})
       : encoding_normal(normal) {
     if (_8bit.has_value) {
-      _8bit.value.rexw = RexwMode::Unneeded;
-      _8bit.value.p66 = Prefix66Mode::Unusable;
-      _8bit.value.fix_8bit = true;
+      auto& v = _8bit.value;
+      v.rexw = RexwMode::Unneeded;
+      v.p66 = Prefix66Mode::Unusable;
+      v.fix_8bit = true;
     }
 
     encoding_8bit = _8bit;
