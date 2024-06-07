@@ -1,8 +1,8 @@
 #pragma once
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <variant>
-#include <limits>
 
 namespace asmlib::x64 {
 

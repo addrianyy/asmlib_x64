@@ -1,11 +1,11 @@
 #pragma once
 #include <array>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <span>
 #include <string_view>
 #include <vector>
-#include <cstring>
 
 #include "Operand.hpp"
 

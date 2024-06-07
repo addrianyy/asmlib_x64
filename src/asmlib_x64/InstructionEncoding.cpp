@@ -18,7 +18,7 @@ using namespace asmlib::x64;
   { __VA_ARGS__ }
 
 #define SIMPLE_INSTRUCTION(name, reg_regmem, memreg_, regmem_imm32, digit) \
-  static const FullInstructionEncoding name(                               \
+  static constexpr FullInstructionEncoding name(                           \
     InstructionEncoding{                                                   \
       .rexw = RexwMode::Usable,                                            \
       .p66 = Prefix66Mode::Usable,                                         \
@@ -46,22 +46,22 @@ SIMPLE_INSTRUCTION(and_, 0x23, 0x21, 0x81, 4)
 SIMPLE_INSTRUCTION(or_, 0x0b, 0x09, 0x81, 1)
 SIMPLE_INSTRUCTION(cmp, 0x3b, 0x39, 0x81, 7)
 
-#define SHIFT_INSTRUCTION(name, digit)        \
-  static const FullInstructionEncoding name(  \
-    InstructionEncoding{                      \
-      .rexw = RexwMode::Usable,               \
-      .p66 = Prefix66Mode::Usable,            \
-      .reguimm8 = OpcodeDigit{{0xc1}, digit}, \
-      .memuimm8 = OpcodeDigit{{0xc1}, digit}, \
-      .regcl = OpcodeDigit{{0xd3}, digit},    \
-      .memcl = OpcodeDigit{{0xd3}, digit},    \
-    },                                        \
-    InstructionEncoding{                      \
-      .reguimm8 = OpcodeDigit{{0xc0}, digit}, \
-      .memuimm8 = OpcodeDigit{{0xc0}, digit}, \
-      .regcl = OpcodeDigit{{0xd2}, digit},    \
-      .memcl = OpcodeDigit{{0xd2}, digit},    \
-    });                                       \
+#define SHIFT_INSTRUCTION(name, digit)           \
+  static constexpr FullInstructionEncoding name( \
+    InstructionEncoding{                         \
+      .rexw = RexwMode::Usable,                  \
+      .p66 = Prefix66Mode::Usable,               \
+      .reguimm8 = OpcodeDigit{{0xc1}, digit},    \
+      .memuimm8 = OpcodeDigit{{0xc1}, digit},    \
+      .regcl = OpcodeDigit{{0xd3}, digit},       \
+      .memcl = OpcodeDigit{{0xd3}, digit},       \
+    },                                           \
+    InstructionEncoding{                         \
+      .reguimm8 = OpcodeDigit{{0xc0}, digit},    \
+      .memuimm8 = OpcodeDigit{{0xc0}, digit},    \
+      .regcl = OpcodeDigit{{0xd2}, digit},       \
+      .memcl = OpcodeDigit{{0xd2}, digit},       \
+    });                                          \
   EXPORT_ENCODING(name)
 
 SHIFT_INSTRUCTION(shl, 4)
@@ -70,27 +70,27 @@ SHIFT_INSTRUCTION(sar, 7)
 SHIFT_INSTRUCTION(rol, 0)
 SHIFT_INSTRUCTION(ror, 1)
 
-#define CONDITIONAL_INSTRUCTION(jcc_name, cmov_name, setcc_name, code) \
-  static const FullInstructionEncoding jcc_name(InstructionEncoding{   \
-    .rexw = RexwMode::Unneeded,                                        \
-    .p66 = Prefix66Mode::Unneeded,                                     \
-    .rel32 = Opcode{{0x0f, code}},                                     \
-  });                                                                  \
-  EXPORT_ENCODING(jcc_name)                                            \
-  static const FullInstructionEncoding cmov_name(InstructionEncoding{  \
-    .rexw = RexwMode::Usable,                                          \
-    .p66 = Prefix66Mode::Usable,                                       \
-    .regreg = Opcode{{0x0f, code - 0x40}},                             \
-    .regmem = Opcode{{0x0f, code - 0x40}},                             \
-  });                                                                  \
-  EXPORT_ENCODING(cmov_name)                                           \
-  static const FullInstructionEncoding setcc_name(InstructionEncoding{ \
-    .rexw = RexwMode::Unneeded,                                        \
-    .p66 = Prefix66Mode::Unneeded,                                     \
-    .fix_8bit = true,                                                  \
-    .reg = OpcodeDigit{{0x0f, code + 0x10}, 0},                        \
-    .mem = OpcodeDigit{{0x0f, code + 0x10}, 0},                        \
-  });                                                                  \
+#define CONDITIONAL_INSTRUCTION(jcc_name, cmov_name, setcc_name, code)     \
+  static constexpr FullInstructionEncoding jcc_name(InstructionEncoding{   \
+    .rexw = RexwMode::Unneeded,                                            \
+    .p66 = Prefix66Mode::Unneeded,                                         \
+    .rel32 = Opcode{{0x0f, code}},                                         \
+  });                                                                      \
+  EXPORT_ENCODING(jcc_name)                                                \
+  static constexpr FullInstructionEncoding cmov_name(InstructionEncoding{  \
+    .rexw = RexwMode::Usable,                                              \
+    .p66 = Prefix66Mode::Usable,                                           \
+    .regreg = Opcode{{0x0f, code - 0x40}},                                 \
+    .regmem = Opcode{{0x0f, code - 0x40}},                                 \
+  });                                                                      \
+  EXPORT_ENCODING(cmov_name)                                               \
+  static constexpr FullInstructionEncoding setcc_name(InstructionEncoding{ \
+    .rexw = RexwMode::Unneeded,                                            \
+    .p66 = Prefix66Mode::Unneeded,                                         \
+    .fix_8bit = true,                                                      \
+    .reg = OpcodeDigit{{0x0f, code + 0x10}, 0},                            \
+    .mem = OpcodeDigit{{0x0f, code + 0x10}, 0},                            \
+  });                                                                      \
   EXPORT_ENCODING(setcc_name)
 
 CONDITIONAL_INSTRUCTION(ja, cmova, seta, 0x87)
@@ -124,15 +124,15 @@ CONDITIONAL_INSTRUCTION(jpe, cmovpe, setpe, 0x8a)
 CONDITIONAL_INSTRUCTION(jpo, cmovpo, setpo, 0x8b)
 CONDITIONAL_INSTRUCTION(js, cmovs, sets, 0x88)
 
-#define BIT_INSTRUCTION(name, opcode, digit)                     \
-  static const FullInstructionEncoding name(InstructionEncoding{ \
-    .rexw = RexwMode::Usable,                                    \
-    .p66 = Prefix66Mode::Usable,                                 \
-    .regreg_inv = Opcode{{0x0f, opcode}},                        \
-    .reguimm8 = OpcodeDigit{{0x0f, 0xba}, digit},                \
-    .memuimm8 = OpcodeDigit{{0x0f, 0xba}, digit},                \
-    .memreg = Opcode{{0x0f, opcode}},                            \
-  });                                                            \
+#define BIT_INSTRUCTION(name, opcode, digit)                         \
+  static constexpr FullInstructionEncoding name(InstructionEncoding{ \
+    .rexw = RexwMode::Usable,                                        \
+    .p66 = Prefix66Mode::Usable,                                     \
+    .regreg_inv = Opcode{{0x0f, opcode}},                            \
+    .reguimm8 = OpcodeDigit{{0x0f, 0xba}, digit},                    \
+    .memuimm8 = OpcodeDigit{{0x0f, 0xba}, digit},                    \
+    .memreg = Opcode{{0x0f, opcode}},                                \
+  });                                                                \
   EXPORT_ENCODING(name)
 
 BIT_INSTRUCTION(bt, 0xa3, 4)
@@ -141,7 +141,7 @@ BIT_INSTRUCTION(btr, 0xb3, 6)
 BIT_INSTRUCTION(bts, 0xab, 5)
 
 #define UNARY_ARITH_INSTRUCTION(name, opcode, digit) \
-  static const FullInstructionEncoding name(         \
+  static constexpr FullInstructionEncoding name(     \
     InstructionEncoding{                             \
       .rexw = RexwMode::Usable,                      \
       .p66 = Prefix66Mode::Usable,                   \
@@ -162,7 +162,7 @@ UNARY_ARITH_INSTRUCTION(mul, 0xf7, 4)
 UNARY_ARITH_INSTRUCTION(idiv, 0xf7, 7)
 
 // Workaround for error caused by the fact that `div` function is already defined.
-static const FullInstructionEncoding div_(
+static constexpr FullInstructionEncoding div_(
   InstructionEncoding{
     .rexw = RexwMode::Usable,
     .p66 = Prefix66Mode::Usable,
@@ -175,30 +175,30 @@ static const FullInstructionEncoding div_(
   });
 EXPORT_ENCODING_CUSTOM_NAME(div, div_)
 
-#define STANDALONE_INSTRUCTION(name, bytes)  \
-  static const FullInstructionEncoding name( \
-    InstructionEncoding{                     \
-      .rexw = RexwMode::Unneeded,            \
-      .p66 = Prefix66Mode::Unneeded,         \
-      .standalone = Opcode{bytes},           \
-    },                                       \
-    InstructionEncoding{                     \
-      .standalone = Opcode{bytes},           \
-    });                                      \
+#define STANDALONE_INSTRUCTION(name, bytes)      \
+  static constexpr FullInstructionEncoding name( \
+    InstructionEncoding{                         \
+      .rexw = RexwMode::Unneeded,                \
+      .p66 = Prefix66Mode::Unneeded,             \
+      .standalone = Opcode{bytes},               \
+    },                                           \
+    InstructionEncoding{                         \
+      .standalone = Opcode{bytes},               \
+    });                                          \
   EXPORT_ENCODING(name)
 
 STANDALONE_INSTRUCTION(int3, {0xcc})
 STANDALONE_INSTRUCTION(rdtsc, MAKE_ARRAY(0x0f, 0x31))
 STANDALONE_INSTRUCTION(nop, {0x90})
 
-#define EXT_INSTRUCTION(name, rexw_, p66_, bytes, fix_8bit_)     \
-  static const FullInstructionEncoding name(InstructionEncoding{ \
-    .rexw = (rexw_),                                             \
-    .p66 = (p66_),                                               \
-    .fix_8bit = (fix_8bit_),                                     \
-    .regreg = Opcode{bytes},                                     \
-    .regmem = Opcode{bytes},                                     \
-  });                                                            \
+#define EXT_INSTRUCTION(name, rexw_, p66_, bytes, fix_8bit_)         \
+  static constexpr FullInstructionEncoding name(InstructionEncoding{ \
+    .rexw = (rexw_),                                                 \
+    .p66 = (p66_),                                                   \
+    .fix_8bit = (fix_8bit_),                                         \
+    .regreg = Opcode{bytes},                                         \
+    .regmem = Opcode{bytes},                                         \
+  });                                                                \
   EXPORT_ENCODING(name)
 
 EXT_INSTRUCTION(movzxb, RexwMode::Usable, Prefix66Mode::Usable, MAKE_ARRAY(0x0f, 0xb6), true)
@@ -207,14 +207,14 @@ EXT_INSTRUCTION(movsxb, RexwMode::Usable, Prefix66Mode::Usable, MAKE_ARRAY(0x0f,
 EXT_INSTRUCTION(movsxw, RexwMode::Usable, Prefix66Mode::Unusable, MAKE_ARRAY(0x0f, 0xbf), false)
 EXT_INSTRUCTION(movsxd, RexwMode::ExplicitRequired, Prefix66Mode::Unusable, {0x63}, false)
 
-static const FullInstructionEncoding cqo(InstructionEncoding{
+static constexpr FullInstructionEncoding cqo(InstructionEncoding{
   .rexw = RexwMode::Usable,
   .p66 = Prefix66Mode::Usable,
   .standalone = Opcode{{0x99}},
 });
 EXPORT_ENCODING(cqo)
 
-static const FullInstructionEncoding mov(
+static constexpr FullInstructionEncoding mov(
   InstructionEncoding{
     .rexw = RexwMode::Usable,
     .p66 = Prefix66Mode::Usable,
@@ -234,7 +234,7 @@ static const FullInstructionEncoding mov(
   });
 EXPORT_ENCODING(mov)
 
-static const FullInstructionEncoding test(
+static constexpr FullInstructionEncoding test(
   InstructionEncoding{
     .rexw = RexwMode::Usable,
     .p66 = Prefix66Mode::Usable,
@@ -251,7 +251,7 @@ static const FullInstructionEncoding test(
   });
 EXPORT_ENCODING(test)
 
-static const FullInstructionEncoding push(InstructionEncoding{
+static constexpr FullInstructionEncoding push(InstructionEncoding{
   .rexw = RexwMode::Implicit,
   .p66 = Prefix66Mode::Usable,
   .reg = OpcodeDigit{{0xff}, 6},
@@ -260,7 +260,7 @@ static const FullInstructionEncoding push(InstructionEncoding{
 });
 EXPORT_ENCODING(push)
 
-static const FullInstructionEncoding pop(InstructionEncoding{
+static constexpr FullInstructionEncoding pop(InstructionEncoding{
   .rexw = RexwMode::Implicit,
   .p66 = Prefix66Mode::Usable,
   .reg = OpcodeDigit{{0x8f}, 0},
@@ -268,7 +268,7 @@ static const FullInstructionEncoding pop(InstructionEncoding{
 });
 EXPORT_ENCODING(pop)
 
-static const FullInstructionEncoding jmp(InstructionEncoding{
+static constexpr FullInstructionEncoding jmp(InstructionEncoding{
   .rexw = RexwMode::Unneeded,
   .p66 = Prefix66Mode::Unneeded,
   .reg = OpcodeDigit{{0xff}, 4},
@@ -277,7 +277,7 @@ static const FullInstructionEncoding jmp(InstructionEncoding{
 });
 EXPORT_ENCODING(jmp)
 
-static const FullInstructionEncoding call(InstructionEncoding{
+static constexpr FullInstructionEncoding call(InstructionEncoding{
   .rexw = RexwMode::Unneeded,
   .p66 = Prefix66Mode::Unneeded,
   .reg = OpcodeDigit{{0xff}, 2},
@@ -286,7 +286,7 @@ static const FullInstructionEncoding call(InstructionEncoding{
 });
 EXPORT_ENCODING(call)
 
-static const FullInstructionEncoding ret(InstructionEncoding{
+static constexpr FullInstructionEncoding ret(InstructionEncoding{
   .rexw = RexwMode::Unneeded,
   .p66 = Prefix66Mode::Unneeded,
   .uimm16 = Opcode{{0xc2}},
@@ -294,7 +294,7 @@ static const FullInstructionEncoding ret(InstructionEncoding{
 });
 EXPORT_ENCODING(ret)
 
-static const FullInstructionEncoding imul(
+static constexpr FullInstructionEncoding imul(
   InstructionEncoding{
     .rexw = RexwMode::Usable,
     .p66 = Prefix66Mode::Usable,
@@ -309,7 +309,7 @@ static const FullInstructionEncoding imul(
   });
 EXPORT_ENCODING(imul)
 
-static const FullInstructionEncoding lea(InstructionEncoding{
+static constexpr FullInstructionEncoding lea(InstructionEncoding{
   .rexw = RexwMode::Usable,
   .p66 = Prefix66Mode::Usable,
   .regmem = Opcode{{0x8d}},
