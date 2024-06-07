@@ -163,145 +163,30 @@ class Assembler {
 
   void clear();
 
-  // region datatype_declarations
-
-#define DECLARE_DATATYPE_HELPER(name, type)    \
-  void name(type value) { push_value(value); } \
+#define X64_ASM_DECLARE_DATATYPE_HELPER(name, type) \
+  void name(type value) { push_value(value); }      \
   void name(std::span<const type> values) { push_values(values); }
+#define X64_ASM_DECLARE_DATATYPE(name, type1, type2) \
+  X64_ASM_DECLARE_DATATYPE_HELPER(name, type1)       \
+  X64_ASM_DECLARE_DATATYPE_HELPER(name, type2)
 
-#define DECLARE_DATATYPE(name, type1, type2) \
-  DECLARE_DATATYPE_HELPER(name, type1)       \
-  DECLARE_DATATYPE_HELPER(name, type2)
+  X64_ASM_DECLARE_DATATYPE(db, int8_t, uint8_t)
+  X64_ASM_DECLARE_DATATYPE(dw, int16_t, uint16_t)
+  X64_ASM_DECLARE_DATATYPE(dd, int32_t, uint32_t)
+  X64_ASM_DECLARE_DATATYPE(dq, int64_t, uint64_t)
 
-  DECLARE_DATATYPE(db, int8_t, uint8_t)
-  DECLARE_DATATYPE(dw, int16_t, uint16_t)
-  DECLARE_DATATYPE(dd, int32_t, uint32_t)
-  DECLARE_DATATYPE(dq, int64_t, uint64_t)
+#undef X64_ASM_DECLARE_DATATYPE_HELPER
+#undef X64_ASM_DECLARE_DATATYPE
 
-#undef DECLARE_DATATYPE_HELPER
-#undef DECLARE_DATATYPE
+#define X64_ASM_INSTRUCTION_0(name) void name();
+#define X64_ASM_INSTRUCTION_1(name) void name(const Operand& op0);
+#define X64_ASM_INSTRUCTION_2(name) void name(const Operand& op0, const Operand& op1);
 
-  // endregion
+#include "Instructions.inc"
 
-  // region instruction_declarations
-
-#define STRINGIFY_HELPER(x) #x
-#define STRINGIFY(x) STRINGIFY_HELPER(x)
-#define ENCODING_NAME(name) _asm_##name##_encoding
-
-#define DECLARE_INSTRUCTION_0(name)                                      \
-  void name() {                                                          \
-    extern const encoding::FullInstructionEncoding* ENCODING_NAME(name); \
-    encode_0(STRINGIFY(name), *ENCODING_NAME(name));                     \
-  }
-#define DECLARE_INSTRUCTION_1(name)                                      \
-  void name(const Operand& op0) {                                        \
-    extern const encoding::FullInstructionEncoding* ENCODING_NAME(name); \
-    encode_1(STRINGIFY(name), *ENCODING_NAME(name), op0);                \
-  }
-#define DECLARE_INSTRUCTION_2(name)                                      \
-  void name(const Operand& op0, const Operand& op1) {                    \
-    extern const encoding::FullInstructionEncoding* ENCODING_NAME(name); \
-    encode_2(STRINGIFY(name), *ENCODING_NAME(name), op0, op1);           \
-  }
-#define DECLARE_CONDITIONAL(jcc_name, cmov_name, setcc_name) \
-  DECLARE_INSTRUCTION_1(jcc_name)                            \
-  DECLARE_INSTRUCTION_2(cmov_name)                           \
-  DECLARE_INSTRUCTION_1(setcc_name)
-
-  DECLARE_INSTRUCTION_2(add)
-  DECLARE_INSTRUCTION_2(sub)
-  DECLARE_INSTRUCTION_2(xor_)
-  DECLARE_INSTRUCTION_2(and_)
-  DECLARE_INSTRUCTION_2(or_)
-  DECLARE_INSTRUCTION_2(cmp)
-
-  DECLARE_INSTRUCTION_2(shl)
-  DECLARE_INSTRUCTION_2(shr)
-  DECLARE_INSTRUCTION_2(sar)
-  DECLARE_INSTRUCTION_2(rol)
-  DECLARE_INSTRUCTION_2(ror)
-
-  DECLARE_CONDITIONAL(ja, cmova, seta)
-  DECLARE_CONDITIONAL(jae, cmovae, setae)
-  DECLARE_CONDITIONAL(jb, cmovb, setb)
-  DECLARE_CONDITIONAL(jbe, cmovbe, setbe)
-  DECLARE_CONDITIONAL(jc, cmovc, setc)
-  DECLARE_CONDITIONAL(je, cmove, sete)
-  DECLARE_CONDITIONAL(jz, cmovz, setz)
-  DECLARE_CONDITIONAL(jg, cmovg, setg)
-  DECLARE_CONDITIONAL(jge, cmovge, setge)
-  DECLARE_CONDITIONAL(jl, cmovl, setl)
-  DECLARE_CONDITIONAL(jle, cmovle, setle)
-  DECLARE_CONDITIONAL(jna, cmovna, setna)
-  DECLARE_CONDITIONAL(jnae, cmovnae, setnae)
-  DECLARE_CONDITIONAL(jnb, cmovnb, setnb)
-  DECLARE_CONDITIONAL(jnbe, cmovnbe, setnbe)
-  DECLARE_CONDITIONAL(jnc, cmovnc, setnc)
-  DECLARE_CONDITIONAL(jne, cmovne, setne)
-  DECLARE_CONDITIONAL(jng, cmovng, setng)
-  DECLARE_CONDITIONAL(jnge, cmovnge, setnge)
-  DECLARE_CONDITIONAL(jnl, cmovnl, setnl)
-  DECLARE_CONDITIONAL(jnle, cmovnle, setnle)
-  DECLARE_CONDITIONAL(jno, cmovno, setno)
-  DECLARE_CONDITIONAL(jnp, cmovnp, setnp)
-  DECLARE_CONDITIONAL(jns, cmovns, setns)
-  DECLARE_CONDITIONAL(jnz, cmovnz, setnz)
-  DECLARE_CONDITIONAL(jo, cmovo, seto)
-  DECLARE_CONDITIONAL(jp, cmovp, setp)
-  DECLARE_CONDITIONAL(jpe, cmovpe, setpe)
-  DECLARE_CONDITIONAL(jpo, cmovpo, setpo)
-  DECLARE_CONDITIONAL(js, cmovs, sets)
-
-  DECLARE_INSTRUCTION_2(bt)
-  DECLARE_INSTRUCTION_2(btc)
-  DECLARE_INSTRUCTION_2(btr)
-  DECLARE_INSTRUCTION_2(bts)
-
-  DECLARE_INSTRUCTION_1(inc)
-  DECLARE_INSTRUCTION_1(dec)
-  DECLARE_INSTRUCTION_1(not_)
-  DECLARE_INSTRUCTION_1(neg)
-  DECLARE_INSTRUCTION_1(mul)
-  DECLARE_INSTRUCTION_1(imul)
-  DECLARE_INSTRUCTION_2(imul)
-  DECLARE_INSTRUCTION_1(div)
-  DECLARE_INSTRUCTION_1(idiv)
-
-  DECLARE_INSTRUCTION_0(cqo)
-  DECLARE_INSTRUCTION_0(int3)
-  DECLARE_INSTRUCTION_0(rdtsc)
-  DECLARE_INSTRUCTION_0(nop)
-
-  DECLARE_INSTRUCTION_2(movzxb)
-  DECLARE_INSTRUCTION_2(movzxw)
-  DECLARE_INSTRUCTION_2(movsxb)
-  DECLARE_INSTRUCTION_2(movsxw)
-  DECLARE_INSTRUCTION_2(movsxd)
-
-  DECLARE_INSTRUCTION_2(mov)
-  DECLARE_INSTRUCTION_2(test)
-
-  DECLARE_INSTRUCTION_1(push)
-  DECLARE_INSTRUCTION_1(pop)
-  DECLARE_INSTRUCTION_1(jmp)
-  DECLARE_INSTRUCTION_1(call)
-
-  DECLARE_INSTRUCTION_0(ret)
-  DECLARE_INSTRUCTION_1(ret)
-
-  DECLARE_INSTRUCTION_2(lea)
-
-#undef DECLARE_CONDITIONAL
-#undef DECLARE_INSTRUCTION_2
-#undef DECLARE_INSTRUCTION_1
-#undef DECLARE_INSTRUCTION_0
-
-#undef ENCODING_NAME
-#undef STRINGIFY
-#undef STRINGIFY_HELPER
-
-  // endregion
+#undef X64_ASM_INSTRUCTION_2
+#undef X64_ASM_INSTRUCTION_1
+#undef X64_ASM_INSTRUCTION_0
 };
 
 }  // namespace asmlib::x64

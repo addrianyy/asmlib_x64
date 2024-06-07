@@ -767,4 +767,31 @@ void Assembler::clear() {
   operand_size = OperandSize::Bits64;
 }
 
+#define X64_ASM_STRINGIFY_HELPER(x) #x
+#define X64_ASM_STRINGIFY(x) X64_ASM_STRINGIFY_HELPER(x)
+
+#define DEFINE_EXTERN_ENCODING(name)                        \
+  namespace encoding {                                      \
+  extern const FullInstructionEncoding* instruction_##name; \
+  }
+
+#define X64_ASM_INSTRUCTION_0(name)                                   \
+  DEFINE_EXTERN_ENCODING(name)                                        \
+  void Assembler::name() {                                            \
+    encode_0(X64_ASM_STRINGIFY(name), *encoding::instruction_##name); \
+  }
+
+#define X64_ASM_INSTRUCTION_1(name)                                        \
+  DEFINE_EXTERN_ENCODING(name)                                             \
+  void Assembler::name(const Operand& op0) {                               \
+    encode_1(X64_ASM_STRINGIFY(name), *encoding::instruction_##name, op0); \
+  }
+#define X64_ASM_INSTRUCTION_2(name)                                             \
+  DEFINE_EXTERN_ENCODING(name)                                                  \
+  void Assembler::name(const Operand& op0, const Operand& op1) {                \
+    encode_2(X64_ASM_STRINGIFY(name), *encoding::instruction_##name, op0, op1); \
+  }
+
+#include "Instructions.inc"
+
 }  // namespace asmlib::x64

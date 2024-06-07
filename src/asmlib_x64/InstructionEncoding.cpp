@@ -1,20 +1,10 @@
 #include "InstructionEncoding.hpp"
 
 using namespace asmlib::x64;
-using namespace asmlib::x64::encoding;
 
-#define EXPORT_ENCODING(name)                                    \
-  namespace asmlib::x64 {                                        \
-  const FullInstructionEncoding* _asm_##name##_encoding = &name; \
-  }                                                              \
-  const FullInstructionEncoding* _asm_##name##_encoding = &name;
+namespace asmlib::x64::encoding {
 
-#define EXPORT_ENCODING_CUSTOM_NAME(name, encoding)                  \
-  namespace asmlib::x64 {                                            \
-  const FullInstructionEncoding* _asm_##name##_encoding = &encoding; \
-  }                                                                  \
-  const FullInstructionEncoding* _asm_##name##_encoding = &encoding;
-
+#define EXPORT_ENCODING(name) const FullInstructionEncoding* instruction_##name = &name;
 #define MAKE_ARRAY(...) \
   { __VA_ARGS__ }
 
@@ -162,8 +152,7 @@ UNARY_ARITH_INSTRUCTION(neg, 0xf7, 3)
 UNARY_ARITH_INSTRUCTION(mul, 0xf7, 4)
 UNARY_ARITH_INSTRUCTION(idiv, 0xf7, 7)
 
-// Workaround for error caused by the fact that `div` function is already defined.
-static constexpr FullInstructionEncoding div_(
+static constexpr FullInstructionEncoding div(
   InstructionEncoding{
     .rexw = RexwMode::Usable,
     .p66 = Prefix66Mode::Usable,
@@ -174,7 +163,7 @@ static constexpr FullInstructionEncoding div_(
     .reg = OpcodeDigit{{0xf7 - 1}, 6},
     .mem = OpcodeDigit{{0xf7 - 1}, 6},
   });
-EXPORT_ENCODING_CUSTOM_NAME(div, div_)
+EXPORT_ENCODING(div)
 
 #define STANDALONE_INSTRUCTION(name, bytes)      \
   static constexpr FullInstructionEncoding name( \
@@ -316,3 +305,5 @@ static constexpr FullInstructionEncoding lea(InstructionEncoding{
   .regmem = Opcode{{0x8d}},
 });
 EXPORT_ENCODING(lea)
+
+}  // namespace asmlib::x64::encoding
